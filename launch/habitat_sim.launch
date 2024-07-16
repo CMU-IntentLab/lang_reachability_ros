@@ -1,0 +1,6 @@
+<launch>
+    <!-- <include file="$(find lang_reachability_ros)/launch/rtabmap.launch"/> -->
+
+    <node pkg="lang_reachability_ros" type="simulator_node.py" name="simulator" respawn="true" />
+    <node pkg="teleop_twist_keyboard" type="teleop_twist_keyboard.py" name="teleop" output="screen"/>
+</launch>

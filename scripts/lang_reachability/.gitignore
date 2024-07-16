@@ -1,0 +1,9 @@
+/configs/path_config.json
+/tests/outputs/
+/tests/inputs/
+/tests/results/
+/.idea/
+*__pycache__*
+/data/
+/examples/tutorials/nav_output
+perception/__init__.py
