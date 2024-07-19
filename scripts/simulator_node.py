@@ -17,7 +17,7 @@ from nav_msgs.msg import Odometry
 
 
 class SimulatorNode:
-    def __init__(self, dataset_name, test_scene, dt=0.01, init_x=0.0, init_y=2.5, init_theta=0.0) -> None:
+    def __init__(self, dataset_name, test_scene, dt=0.01, init_x=0.0, init_y=0.0, init_theta=0.0) -> None:
         self.sim = sim.Simulator(dataset_name=dataset_name, test_scene=test_scene)
         self.robot = systems.Dubins3D(init_x=init_x, init_y=init_y, init_theta=init_theta, dt=dt)
         self.bridge = cv_bridge.CvBridge()
@@ -198,7 +198,7 @@ rospy.init_node("simulator")
 rate = rospy.Rate(10)
 
 dataset_name, test_scene = setup_data()
-sim_node = SimulatorNode(dataset_name=dataset_name, test_scene=test_scene)
+sim_node = SimulatorNode(dataset_name=dataset_name, test_scene=test_scene, init_x=0.31, init_y=2.5, init_theta=0.0)
 
 while not rospy.is_shutdown():
     sim_node.update_sim()
