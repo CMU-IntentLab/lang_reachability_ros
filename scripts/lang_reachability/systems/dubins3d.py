@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 
 class Dubins3D:
     """ A discrete time dubins car with state
@@ -15,6 +16,7 @@ class Dubins3D:
         self.wmax = wmax
 
         self.state = np.array([init_x, init_y, init_theta])
+
 
     def update_robot_state(self, x, y, theta):
         self.state = np.array([x, y, theta%(2*np.pi)])
@@ -34,4 +36,35 @@ class Dubins3D:
     
     def saturate_angular_velocity(self, w):
         return np.sign(w) * np.min(np.abs([w, self.wmax]))
+
+
+def dubins_dynamics_tensor(current_state: torch.Tensor, action: torch.Tensor, dt: float) \
+        -> torch.Tensor:
+    """
+    current_state: shape(num_samples, dim_x)
+    action: shape(num_samples, dim_u)
+
+    return:
+    next_state: shape(num_samples, dim_x)
+    """
+    x = current_state[:, 0]
+    y = current_state[:, 1]
+    theta = current_state[:, 2]
+
+    v = action[:, 0]
+    w = action[:, 1]
+
+    # Compute next state
+    next_x = x + v * torch.cos(theta) * dt
+    next_y = y + v * torch.sin(theta) * dt
+    next_theta = theta + w * dt
+
+    # Wrap theta to keep it within [-pi, pi]
+    next_theta = (next_theta + torch.pi) % (2 * torch.pi) - torch.pi
+
+    # Combine next state components into a single tensor
+    next_state = torch.stack([next_x, next_y, next_theta], dim=1)
+    return next_state
+
+
 
