@@ -14,7 +14,7 @@ sys.path.append(dir_path)  # add lang-reachability to PYTHONPATH
 # - function that converts from simulator default frame to our world frame where x = forward, y = right, z = up
 
 class Simulator:
-    def __init__(self, dataset_name, test_scene, sim_settings=None) -> None:
+    def __init__(self, dataset_name, test_scene, test_scene_name, sim_settings=None) -> None:
         with open(os.path.join(dir_path, 'configs/datasets', f'{dataset_name}.json')) as f:
             self.dataset_settings = json.load(f)
         self.agent_sensor_settings = self.dataset_settings['agent_sensor_settings']
@@ -22,6 +22,7 @@ class Simulator:
         self.agent_sensor_settings['scene'] = test_scene
         self.cfg = None
         self.top_down_map = None
+        self.map_resolution = self.dataset_settings['map_resolution']
         if sim_settings is None:
             if dataset_name == 'hssd':
                 self.cfg = self._make_config()
@@ -33,7 +34,9 @@ class Simulator:
         else:
             self.agent_sensor_settings = sim_settings
             self.test_scene = sim_settings["scene"]
-        
+
+        self.test_scene_name = test_scene_name
+
         self.init_r = np.pi/2
         self.init_p = np.pi/2
         self.init_y = np.pi/2
@@ -42,7 +45,7 @@ class Simulator:
         self.sim = self._init_sim(self.cfg)
         self.agent = self._init_agent(self.agent_sensor_settings)
         # self._calculate_navmesh()
-        # self.get_top_down_map()
+        self.get_top_down_map()
 
     def _calculate_navmesh(self):
         navmesh_settings = habitat_sim.NavMeshSettings()
@@ -232,15 +235,28 @@ class Simulator:
         return observations["depth_sensor"]
 
     # def get_top_down_map(self, height=0.0):
-    #     self.top_down_map = maps.get_topdown_map(
-    #         self.sim.pathfinder, map_resolution=1024, height=height
-    #     )
+        # TODO: fix habitat in ROS
     #     # 0: occupied, 1: not occupied, 2, border
-    #     return
+    #     self.top_down_map = maps.get_topdown_map(
+    #         self.sim.pathfinder, height=height, meters_per_pixel=self.map_resolution
+    #     )
+    #     # remap to 0: free, 1: occupied
+    #     remap = np.array([1, 0, 1], dtype=np.uint8)
+    #     #
+    #     self.top_down_map = remap[self.top_down_map]
+
+    def get_top_down_map(self):
+        # TODO: fix habitat in ROS
+        # read direcly from file for now
+        self.top_down_map = np.load(os.path.join(
+            "/home/zli133/shared/ml_projects/lang-reachability/tests/outputs",
+            self.test_scene_name, "top_down_map.npy"
+        ))
+
 
     def save_top_down_map(self, path):
         recolor_map = np.array(
-            [[128, 128, 128], [255, 255, 255], [0, 0, 0]], dtype=np.uint8
+            [[255, 255, 255], [0, 0, 0]], dtype=np.uint8
         )
         top_down_map = recolor_map[self.top_down_map]
         plt.imshow(top_down_map)
