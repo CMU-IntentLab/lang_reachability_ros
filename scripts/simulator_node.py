@@ -9,16 +9,17 @@ import rospy
 import cv_bridge
 import tf2_ros
 import tf.transformations
+import numpy as np
 
 from std_msgs.msg import Header
 from geometry_msgs.msg import Pose, PoseStamped, Twist, Quaternion, TransformStamped
 from sensor_msgs.msg import CameraInfo, Image
-from nav_msgs.msg import Odometry
+from nav_msgs.msg import Odometry, OccupancyGrid
 
 
 class SimulatorNode:
-    def __init__(self, dataset_name, test_scene, dt=0.01, init_x=0.0, init_y=0.0, init_theta=0.0) -> None:
-        self.sim = sim.Simulator(dataset_name=dataset_name, test_scene=test_scene)
+    def __init__(self, dataset_name, test_scene, test_scene_name, dt=0.01, init_x=0.0, init_y=0.0, init_theta=0.0) -> None:
+        self.sim = sim.Simulator(dataset_name=dataset_name, test_scene=test_scene, test_scene_name=test_scene_name)
         self.robot = systems.Dubins3D(init_x=init_x, init_y=init_y, init_theta=init_theta, dt=dt)
         self.bridge = cv_bridge.CvBridge()
 
@@ -27,12 +28,18 @@ class SimulatorNode:
         self.robot_view_rgb_pub = rospy.Publisher("rgb/image", Image, queue_size=10)
         self.robot_view_depth_pub = rospy.Publisher("depth/image", Image, queue_size=10)
         self.camera_info_pub = rospy.Publisher("rgb/camera_info", CameraInfo, queue_size=10)
+        self.map_pub = rospy.Publisher("floor_plan", OccupancyGrid, queue_size=10)
         
         self.cmd_vel_sub = rospy.Subscriber("cmd_vel", Twist, callback=self.cmd_vel_callback)
+        self.goal_sub = rospy.Subscriber("goal", PoseStamped, callback=self.goal_callback)
 
         self.broadcaster = tf2_ros.StaticTransformBroadcaster()
         
         self.vel = [0.0, 0.0]
+
+    def goal_callback(self, msg: PoseStamped):
+        # print(f"goal received: x={msg.pose.position.x}")
+        pass
 
     def cmd_vel_callback(self, msg: Twist):
         v = msg.linear.x
@@ -46,12 +53,36 @@ class SimulatorNode:
         depth = self.sim.get_depth_observation(state[0], state[1], state[2])
         # topdown_view = sim.get_topdown_view()
 
+        self.publish_floorplan()
         self.publish_robot_odom()
         self.publish_rgb_img(img)
         self.publish_depth_img(depth)
         self.publish_camera_info()
         self._cameralink_to_baselink_tf()
         self._odom_to_baselink_tf(state[0], state[1], state[2])
+
+    def publish_floorplan(self):
+        floorplan = OccupancyGrid()
+        floorplan_data = np.flipud(self.sim.top_down_map)
+
+        floorplan.header = Header()
+        floorplan.header.stamp = rospy.Time.now()
+        floorplan.header.frame_id = "map"
+
+        floorplan.info.resolution = self.sim.map_resolution
+        floorplan.info.width = floorplan_data.shape[1]
+        floorplan.info.height = floorplan_data.shape[0]
+        floorplan.info.origin.position.x = -floorplan.info.width * floorplan.info.resolution / 2
+        floorplan.info.origin.position.y = -floorplan.info.height * floorplan.info.resolution / 2
+        floorplan.info.origin.position.z = 0.0
+        floorplan.info.origin.orientation.x = 0.0
+        floorplan.info.origin.orientation.y = 0.0
+        floorplan.info.origin.orientation.z = 0.0
+        floorplan.info.origin.orientation.w = 1.0
+
+        floorplan.data = floorplan_data.flatten().tolist()
+
+        self.map_pub.publish(floorplan)
 
     def publish_camera_info(self):
         K = self.sim.get_camera_intrinsics_mat()
@@ -177,7 +208,7 @@ def setup_data():
 
     data_root = path_config['data_root']
     dataset_name = 'hssd'
-    scene_idx = 0
+    scene_idx = 2
     if dataset_name == 'hssd':
         scene_map = {0: "102344469", 1: "102344022", 2: "102344094", 3: "103997403_171030405", 4: "102815859", 5:"102816216"}
         test_scene_name = scene_map[scene_idx]
@@ -192,13 +223,13 @@ def setup_data():
         test_scene_name = scene_map[scene_idx]
         sub_title = test_scene_name.split('-')[-1]
         test_scene = os.path.join(data_root, "hm3d/train", f"{test_scene_name}/{sub_title}.basis.glb")
-    return dataset_name, test_scene
+    return dataset_name, test_scene, test_scene_name
 
 rospy.init_node("simulator")
 rate = rospy.Rate(10)
 
-dataset_name, test_scene = setup_data()
-sim_node = SimulatorNode(dataset_name=dataset_name, test_scene=test_scene, init_x=0.31, init_y=2.5, init_theta=0.0)
+dataset_name, test_scene, test_scene_name = setup_data()
+sim_node = SimulatorNode(dataset_name=dataset_name, test_scene=test_scene, test_scene_name=test_scene_name, init_x=0, init_y=0, init_theta=0.0)
 
 while not rospy.is_shutdown():
     sim_node.update_sim()
