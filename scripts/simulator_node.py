@@ -172,7 +172,7 @@ class SimulatorNode:
 
 def setup_data():
     dir_path = str(Path(__file__).parent.parent)
-    with open(os.path.join(dir_path, 'scripts/lang_reachability/configs/path_config.json')) as path_config_file:
+    with open(os.path.join(dir_path, 'configs/path_config.json')) as path_config_file:
         path_config = json.load(path_config_file)
 
     data_root = path_config['data_root']
