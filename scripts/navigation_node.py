@@ -33,19 +33,27 @@ class NavigationNode:
 
     def odom_callback(self, msg: Odometry) -> None:
         self._odom = msg
-        self._navigator.set_odom(self._odom)
+        pos = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z]
+        quat = [msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w]
+        self._navigator.set_odom(position=pos, orientation=quat)
         if not self.navigator_ready:
             self._check_navigator_ready()
 
     def map_callback(self, msg: OccupancyGrid) -> None:
         self._map = msg
-        self._navigator.set_map(self._map)
+        map_data = msg.data
+        map_dim = [msg.info.height, msg.info.width]
+        map_origin = [msg.info.origin.position.x, msg.info.origin.position.y]
+        map_resolution = msg.info.resolution
+        self._navigator.set_map(map_data=map_data, map_dim=map_dim, map_origin=map_origin, map_resolution=map_resolution)
         if not self.navigator_ready:
             self._check_navigator_ready()
 
     def goal_callback(self, msg: PoseStamped) -> None:
         self._goal = msg
-        self._navigator.set_goal(self._goal)
+        position = [msg.pose.position.x, msg.pose.position.y]
+        quat = [msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w]
+        self._navigator.set_goal(position=position, orientation=quat)
         if not self.navigator_ready:
             self._check_navigator_ready()
 

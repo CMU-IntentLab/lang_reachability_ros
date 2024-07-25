@@ -116,8 +116,9 @@ class ConstraintDetectorNode:
         self.vlm_detections_pub.publish(msg)
 
     def publish_semantic_grid_map(self):
-        msg = self.__construct_map_msg(self.semantic_grid_map)
-        self.semantic_grid_map_pub.publish(msg)
+        if self.semantic_grid_map is not None:
+            msg = self.__construct_map_msg(self.semantic_grid_map)
+            self.semantic_grid_map_pub.publish(msg)
 
     def publish_constraint_grid_map(self, merged_map):
         """
