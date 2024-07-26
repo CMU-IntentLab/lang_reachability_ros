@@ -20,10 +20,10 @@ from nav_msgs.msg import Odometry, OccupancyGrid
 class SimulatorNode:
     def __init__(self, dataset_name, test_scene, test_scene_name, dt=0.01, init_x=0.0, init_y=0.0, init_theta=0.0) -> None:
         self.sim = sim.Simulator(dataset_name=dataset_name, test_scene=test_scene, test_scene_name=test_scene_name)
-        self.robot = systems.Dubins3D(init_x=init_x, init_y=init_y, init_theta=init_theta, dt=dt)
+        self.robot = systems.Unicycle3D(init_x=init_x, init_y=init_y, init_theta=init_theta, dt=dt)
         self.bridge = cv_bridge.CvBridge()
 
-        self.robot_pose_pub = rospy.Publisher("robot/gt_pose", Pose, queue_size=10)
+        self.robot_pose_pub = rospy.Publisher("gt_pose", Pose, queue_size=10)
         self.odom_pub = rospy.Publisher("odom", Odometry, queue_size=10)
         self.robot_view_rgb_pub = rospy.Publisher("rgb/image", Image, queue_size=10)
         self.robot_view_depth_pub = rospy.Publisher("depth/image", Image, queue_size=10)
@@ -203,7 +203,7 @@ class SimulatorNode:
 
 def setup_data():
     dir_path = str(Path(__file__).parent.parent)
-    with open(os.path.join(dir_path, 'configs/path_config.json')) as path_config_file:
+    with open(os.path.join(dir_path, 'config/path_config.json')) as path_config_file:
         path_config = json.load(path_config_file)
 
     data_root = path_config['data_root']
