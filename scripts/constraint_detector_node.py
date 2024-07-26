@@ -31,7 +31,7 @@ class ConstraintDetectorNode:
         self.constaints_grid_map_pub = rospy.Publisher("constraints_grid_map", OccupancyGrid, queue_size=10)
         self.semantic_grid_map_pub = rospy.Publisher("semantic_grid_map", OccupancyGrid, queue_size=10)
 
-        self.text_query_sub = rospy.Subscriber("text_query", String, callback=self.text_query_callback)
+        self.text_query_sub = rospy.Subscriber("language_constraint", String, callback=self.text_query_callback)
         self.grid_map_sub = rospy.Subscriber("/rtabmap/grid_map", OccupancyGrid, callback=self.grid_map_callback)
         self.rgb_img_sub = rospy.Subscriber("rgb/image", Image, callback=self.rgb_img_callback)
         self.depth_img_sub = rospy.Subscriber("depth/image", Image, callback=self.depth_img_callback)

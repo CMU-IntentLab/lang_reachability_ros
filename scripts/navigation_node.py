@@ -12,7 +12,7 @@ class NavigationNode:
         self.goal_sub = rospy.Subscriber("goal", PoseStamped, callback=self.goal_callback)
         self.map_sub = rospy.Subscriber("floor_plan", OccupancyGrid, callback=self.map_callback)
 
-        self.twist_pub = rospy.Publisher("cmd_vel", Twist, queue_size=1)
+        self.twist_pub = rospy.Publisher("nominal_cmd_vel", Twist, queue_size=1)
         self.marker_pub = rospy.Publisher("vis_trajectories", MarkerArray, queue_size=1)
 
         self._device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")

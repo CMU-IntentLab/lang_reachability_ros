@@ -9,6 +9,7 @@ class CommandNode:
         self.language_cmd = "avoid the rug" # TODO: handle for owl-vit
 
         self.goal_pub = rospy.Publisher("goal", PoseStamped, queue_size=1)
+        
     def send_goal(self):
         # x = 1.0
         # y = -3.5
