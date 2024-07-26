@@ -1,1 +1,3 @@
 /scripts/lang_reachability/configs/path_config.json
+/scripts/__pycache__/*
+/.idea/*
