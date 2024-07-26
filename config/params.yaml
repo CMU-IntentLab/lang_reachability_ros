@@ -19,6 +19,7 @@ trajectory_visualization_topic: vis_trajectories    # topic with all planned tra
 language_constraint_topic: language_constraint      # topic with language constraint (e.g. 'avoid the rug')
 
 # Parameters
+data_root: "/home/leo/git/lang_reachability/data/"
 nominal_planner: mppi                               # name of nominal planner
 score_threshold: 0.2                                # score threshold for VLM detections
 dt: 0.1                                             # time discretization for dynamics and simulation
