@@ -13,6 +13,7 @@ import tf.transformations
 from std_msgs.msg import String
 from nav_msgs.msg import OccupancyGrid
 from sensor_msgs.msg import Image, CameraInfo
+from geometry_msgs.msg import PoseWithCovarianceStamped
 
 import numpy as np
 import cv2
@@ -22,6 +23,22 @@ import cv2
 
 class ConstraintDetectorNode:
     def __init__(self) -> None:
+        self.rgb_img = None
+        self.depth_img = None
+        self.robot_pose = None
+
+        # camera params
+        self.K = None
+        self.K_inv = None
+        self.T = None
+        self.T_inv = None
+
+        # map params
+        self.resolution = None
+        self.origin = None
+        self.semantic_grid_map = None
+        self.grid_map = None
+    
         self.object_detector = perception.ObjectDetector(score_threshold=0.2)
         self.bridge = cv_bridge.CvBridge()
         self.tf_buffer = tf2_ros.Buffer()
@@ -36,24 +53,13 @@ class ConstraintDetectorNode:
         self.rgb_img_sub = rospy.Subscriber("rgb/image", Image, callback=self.rgb_img_callback)
         self.depth_img_sub = rospy.Subscriber("depth/image", Image, callback=self.depth_img_callback)
         self.camera_info_sub = rospy.Subscriber("rgb/camera_info", CameraInfo, callback=self.camera_info_callback)
-        
-        self.rgb_img = None
-        self.depth_img = None
+        self.robot_pose_sub = rospy.Subscriber("rtabmap/localization_pose", PoseWithCovarianceStamped, callback=self.robot_pose_callback)
 
-        # camera params
-        self.K = None
-        self.K_inv = None
-        self.T = None
-        self.T_inv = None
-
-        # map params
-        self.resolution = None
-        self.origin = None
-        self.semantic_grid_map = None
-        self.grid_map = None
+        rospy.loginfo(f"Initialized VLM with the following language constraints: {self.object_detector.text_queries}")
 
     def text_query_callback(self, msg: String):
         self.object_detector.add_new_text_query(msg.data)
+        rospy.loginfo(f"Added '{msg.data}' to the list of language constraints. Current constraints are '{self.object_detector.text_queries}'.")
 
     def grid_map_callback(self, msg: OccupancyGrid):
         self.resolution = msg.info.resolution
@@ -75,8 +81,14 @@ class ConstraintDetectorNode:
             self.K = np.reshape(msg.K, (3, 3))
             self.K_inv = np.linalg.inv(self.K)
 
+    def robot_pose_callback(self, msg: PoseWithCovarianceStamped):
+        pos = msg.pose.pose.position
+        quat = msg.pose.pose.orientation
+        euler = tf.transformations.euler_from_quaternion([quat.x, quat.y, quat.z, quat.w])
+        self.robot_pose = np.array([pos.x, pos.y, euler[2]])
+
     def update_constraints_map(self):
-        if self.rgb_img is None or self.depth_img is None:
+        if self.rgb_img is None or self.depth_img is None or self.robot_pose is None:
             return
         
         rgb_img = np.copy(self.rgb_img)
@@ -84,7 +96,7 @@ class ConstraintDetectorNode:
         K_inv = self.get_inv_camera_intrinsics_matrix()
         T_inv = self.get_inv_camera_extrinsics_matrix()
         for bbox, label in detections:
-            x_occ, y_occ = self.object_detector.estimate_object_position(self.depth_img, bbox, K_inv, T_inv)
+            x_occ, y_occ = self.object_detector.estimate_object_position(self.robot_pose, self.depth_img, bbox, K_inv, T_inv, threshold=10)
             row, col = self.__position_to_cell(x_occ, y_occ)
             try:
                 self.semantic_grid_map[row, col] = 100
@@ -95,21 +107,21 @@ class ConstraintDetectorNode:
 
         self.publish_vlm_detections(rgb_img)
         self.publish_semantic_grid_map()
-        merged_map = self.merge_maps()
-        if merged_map is not None:
-            self.publish_constraint_grid_map(merged_map)
+        # merged_map = self.merge_maps()
+        # if merged_map is not None:
+        #     self.publish_constraint_grid_map(merged_map)
 
-    def merge_maps(self):
-        """
-        merges rtabmap and owl-vit constraints occupancy maps
-        """
-        if self.semantic_grid_map is None:
-            rospy.logwarn("Cannot merge maps because semantic occupancy map has not been initialized yet.")
-            return None
+    # def merge_maps(self):
+    #     """
+    #     merges rtabmap and owl-vit constraints occupancy maps
+    #     """
+    #     if self.semantic_grid_map is None:
+    #         rospy.logwarn("Cannot merge maps because semantic occupancy map has not been initialized yet.")
+    #         return None
         
-        merged_map = self.grid_map.astype(int) + self.semantic_grid_map.astype(int)
-        merged_map = np.clip(merged_map, a_min=-1, a_max=100, dtype=int)
-        return merged_map
+    #     merged_map = self.grid_map.astype(int) + self.semantic_grid_map.astype(int)
+    #     merged_map = np.clip(merged_map, a_min=-1, a_max=100, dtype=int)
+    #     return merged_map
 
     def publish_vlm_detections(self, rgb_img):
         msg = self.bridge.cv2_to_imgmsg(rgb_img, encoding="rgb8")

@@ -140,7 +140,7 @@ while not solver_node.brt_computed and not rospy.is_shutdown():
     rospy.sleep(2)
 
 
-brt_update_interval = 300
+brt_update_interval = 15
 rate = rospy.Rate(10)
 while not rospy.is_shutdown():
     if rospy.Time.now().secs - solver_node.last_updated >= brt_update_interval:
