@@ -2,13 +2,14 @@ import rospy
 import torch
 import numpy as np
 from nav_msgs.msg import Odometry, OccupancyGrid
-from geometry_msgs.msg import PoseStamped, Pose, Twist
+from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, Pose, Twist
 from visualization_msgs.msg import Marker, MarkerArray
 from lang_reachability import navigator
 
 class NavigationNode:
     def __init__(self):
         self.odom_sub = rospy.Subscriber("odom", Odometry, callback=self.odom_callback)
+        self.pose_sub = rospy.Subscriber("/rtabmap/localization_pose", PoseWithCovarianceStamped, callback=self.pose_callback)
         self.goal_sub = rospy.Subscriber("goal", PoseStamped, callback=self.goal_callback)
         self.map_sub = rospy.Subscriber("floor_plan", OccupancyGrid, callback=self.map_callback)
 
@@ -33,11 +34,19 @@ class NavigationNode:
 
     def odom_callback(self, msg: Odometry) -> None:
         self._odom = msg
+        # pos = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z]
+        # quat = [msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w]
+        # self._navigator.set_odom(position=pos, orientation=quat)
+        # if not self.navigator_ready:
+        #     self._check_navigator_ready()
+    
+    def pose_callback(self, msg: PoseWithCovarianceStamped):
+        # self._odom = msg
         pos = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z]
         quat = [msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w]
         self._navigator.set_odom(position=pos, orientation=quat)
         if not self.navigator_ready:
-            self._check_navigator_ready()
+            self._check_navigator_ready()  
 
     def map_callback(self, msg: OccupancyGrid) -> None:
         self._map = msg
