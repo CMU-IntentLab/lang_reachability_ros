@@ -64,7 +64,7 @@ class SimulatorNode:
         self.publish_camera_info()
         # self.publish_global_pose()
         self._cameralink_to_baselink_tf()
-        self._map_to_odom_tf()
+        # self._map_to_odom_tf()
 
         self._odom_to_baselink_tf(*self.sim.get_agent_state_odom())
 
@@ -250,12 +250,12 @@ class SimulatorNode:
 
 def setup_data():
     dir_path = str(Path(__file__).parent.parent)
-    with open(os.path.join(dir_path, 'config/path_config.json')) as path_config_file:
-        path_config = json.load(path_config_file)
+    with open(os.path.join(dir_path, 'config/config.json')) as path_config_file:
+        config = json.load(path_config_file)
 
-    data_root = path_config['data_root']
-    dataset_name = 'hssd-hab'
-    scene_idx = 2
+    data_root = config['data_root']
+    dataset_name = config['dataset_name']
+    scene_idx = config['scene_idx']
     if dataset_name == 'hssd':
         scene_map = {0: "102344469", 1: "102344022", 2: "102344094", 3: "103997403_171030405", 4: "102815859", 5:"102816216"}
         test_scene_name = scene_map[scene_idx]
@@ -276,7 +276,7 @@ rospy.init_node("simulator")
 rate = rospy.Rate(10)
 
 dataset_name, test_scene, test_scene_name = setup_data()
-sim_node = SimulatorNode(dataset_name=dataset_name, test_scene=test_scene, test_scene_name=test_scene_name, init_x=1, init_y=0, init_theta=1.5)
+sim_node = SimulatorNode(dataset_name=dataset_name, test_scene=test_scene, test_scene_name=test_scene_name, init_x=0.5, init_y=3.5, init_theta=1.5)
 
 while not rospy.is_shutdown():
     sim_node.update_sim()
