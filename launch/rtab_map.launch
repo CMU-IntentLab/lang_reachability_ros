@@ -1,6 +1,0 @@
-<launch>
-<node name="rtabmap" pkg="rtabmap_slam" type="rtabmap" args="--delete_db_on_start" output="screen">
-   <!-- LOCALIZATION MODE -->
-   <param name="Mem/IncrementalMemory" type="string" value="true"/>
-</node>
-</launch>

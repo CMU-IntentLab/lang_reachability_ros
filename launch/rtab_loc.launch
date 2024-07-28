@@ -1,6 +1,0 @@
-<launch>
-<node name="rtabmap" pkg="rtabmap_slam" type="rtabmap" args="" output="screen">
-   <!-- LOCALIZATION MODE -->
-   <param name="Mem/IncrementalMemory" type="string" value="false"/>
-</node>
-</launch>
