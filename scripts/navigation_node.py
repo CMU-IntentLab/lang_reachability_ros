@@ -3,6 +3,7 @@ import torch
 import numpy as np
 from nav_msgs.msg import Odometry, OccupancyGrid
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, Pose, Twist
+from std_msgs.msg import Float32
 from visualization_msgs.msg import Marker, MarkerArray
 from lang_reachability import navigator
 
@@ -15,6 +16,7 @@ class NavigationNode:
 
         self.twist_pub = rospy.Publisher("nominal_cmd_vel", Twist, queue_size=1)
         self.marker_pub = rospy.Publisher("vis_trajectories", MarkerArray, queue_size=1)
+        self.planning_time_pub = rospy.Publisher("nominal_planning_time", Float32, queue_size=10)
 
         self._device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         self._dtype = torch.float32
@@ -77,8 +79,11 @@ class NavigationNode:
             return False
 
     def publish_command(self):
+        start_time = rospy.Time.now().secs
         v, w = self._navigator.get_command()
-        print(v, w)
+        time_taken = rospy.Time.now().secs - start_time
+        self.planning_time_pub.publish(Float32(data=time_taken))
+        # print(v, w)
         twist = Twist()
 
         twist.linear.x = v

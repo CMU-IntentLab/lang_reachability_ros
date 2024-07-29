@@ -2,8 +2,10 @@
 
 import rospy
 
-from geometry_msgs.msg import Twist, PoseWithCovarianceStamped
+from geometry_msgs.msg import Twist, PoseWithCovarianceStamped, PoseStamped
 from nav_msgs.msg import OccupancyGrid, Odometry
+from std_msgs.msg import Float32
+
 import tf.transformations as tft 
 
 import numpy as np
@@ -28,6 +30,10 @@ class SafeControllerNode:
         self.semantic_map_sub = rospy.Subscriber("semantic_grid_map", OccupancyGrid, callback=self.semantic_map_callback)
 
         self.safe_action_pub = rospy.Publisher("cmd_vel", Twist, queue_size=1)
+        self.value_function_pub = rospy.Publisher("value_function_at_state", PoseStamped, queue_size=10)
+        self.failure_pub = rospy.Publisher("failure_set_value", PoseStamped, queue_size=10)
+        self.safe_planning_time_pub = rospy.Publisher("safe_planning_time", Float32, queue_size=10)
+        self.brt_computation_time_pub = rospy.Publisher("brt_computation_time", Float32, queue_size=10)
 
     def robot_pose_callback(self, msg: PoseWithCovarianceStamped):
         pos = msg.pose.pose.position
@@ -38,9 +44,13 @@ class SafeControllerNode:
     def nominal_action_callback(self, msg: Twist):
         if self.brt_computed:
             nominal_action = np.array([msg.linear.x, msg.angular.z])
-            safe_action = self.compute_safe_control(nominal_action)
+            safe_action, value, initial_value = self.compute_safe_control(nominal_action)
             safe_action_msg = self._construct_twist_msg(safe_action)
             self.safe_action_pub.publish(safe_action_msg)
+            value_function_msg = self._construct_pose_stamped_msg([self.robot_pose[0], self.robot_pose[1], value])
+            self.value_function_pub.publish(value_function_msg)
+            failure_msg = self._construct_pose_stamped_msg([self.robot_pose[0], self.robot_pose[1], initial_value])
+            self.failure_pub.publish(failure_msg)
         else:
             rospy.logwarn("BRT was not computed yet. Not protecting against nominal action!")
             nominal_action = np.array([msg.linear.x, msg.angular.z])
@@ -71,18 +81,27 @@ class SafeControllerNode:
         constraints_grid_map = self.merge_maps()
         constraints_grid_map = 1 - constraints_grid_map     # make 0 = occupied, 1 = free
         rospy.loginfo(f"grid map shape = {np.shape(constraints_grid_map)}")
+        
+        start_time = rospy.Time.now().secs
         self.values = self.reachability_solver.solve(constraints_grid_map)
-        self.last_updated = rospy.Time.now().secs
-        rospy.loginfo("Finished BRT computation")
+        end_time = rospy.Time.now().secs
+        time_taken = end_time - start_time
+        self.brt_computation_time_pub.publish(Float32(data=time_taken))
+
         self.brt_computed = True
+        self.last_updated = end_time
+        rospy.loginfo("Finished BRT computation")
 
     def compute_safe_control(self, nominal_action):
         if self.robot_pose is None:
             rospy.logerr("Robot pose was not received. Cannot compute safe action.")
             return nominal_action
         
-        safe_action = self.reachability_solver.compute_safe_control(self.robot_pose, nominal_action)
-        return safe_action
+        start_time = rospy.Time.now().secs
+        safe_action, value = self.reachability_solver.compute_safe_control(self.robot_pose, nominal_action)
+        time_taken = rospy.Time.now().secs - start_time
+        self.safe_planning_time_pub.publish(Float32(data=time_taken))
+        return safe_action, value
     
     def merge_maps(self):
         """
@@ -119,15 +138,20 @@ class SafeControllerNode:
         msg.angular.z = action[1]
         return msg
     
-    def __position_to_cell(self, x, y, origin='lower'):
+    def _construct_pose_stamped_msg(self, pos, ori):
         """
-        converts (x, y) position to (row, column) cell in the grid map
+        construct geometry_msgs/Pose assuming pos = [x, y, z], ori = [roll, pitch, yaw]
+        
+        TODO: include orientation
         """
-        column = (x - self.map_origin[0])/self.map_resolution
-        row = (y - self.map_origin[1])/self.map_resolution
-        if origin == 'upper':
-            row = self.semantic_grid_map.shape[0] - y
-        return row.astype(int), column.astype(int)
+        msg = PoseStamped()
+        msg.header.stamp = rospy.Time.now()
+        msg.pose.position.x = pos[0]
+        msg.pose.position.y = pos[1]
+        msg.pose.position.z = pos[2]
+        
+        msg.pose.orientation.w = 1.0
+        return msg
 
 
 rospy.init_node("safe_controller_node")

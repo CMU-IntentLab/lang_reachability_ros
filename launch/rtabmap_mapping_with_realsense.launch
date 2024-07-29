@@ -1,0 +1,40 @@
+<launch>
+  <group ns="rtabmap">
+    <node name="rtabmap" pkg="rtabmap_slam" type="rtabmap" output="screen" args="--delete_db_on_start">
+          <param name="frame_id" type="string" value="locobot/base_link"/>
+
+          <param name="subscribe_depth" type="bool" value="true"/>
+          <param name="subscribe_rgb" type="bool" value="true"/>
+          <param name="subscribe_scan" type="bool" value="false"/>
+
+          <remap from="odom" to="/locobot/mobile_base/odom"/>
+          <remap from="rgb/image" to="/camera/color/image_raw"/>
+          <remap from="depth/image" to="/camera/depth/image_rect_raw"/>
+          <remap from="rgb/camera_info" to="/camera/color/camera_info" /> 
+
+          <param name="queue_size" type="int" value="10"/>
+
+          <!-- RTAB-Map's parameters -->
+          <param name="RGBD/NeighborLinkRefining" type="string" value="true"  />
+          <param name="RGBD/ProximityBySpace"     type="string" value="true"  />
+          <param name="RGBD/AngularUpdate"        type="string" value="0.01"  />
+          <param name="RGBD/LinearUpdate"         type="string" value="0.01"  />
+          <param name="RGBD/CreateOccupancyGrid"  type="string" value="true"  />
+          <param name="RGBD/OptimizeFromGraphEnd" type="string" value="false" />
+          <!-- <param name="Grid/Sensor"               type="string" value="depth" /> -->
+          <param name="Grid/MaxObstacleHeight"    type="string" value="1.2"   />
+          <param name="Grid/MaxGroundHeight"      type="string" value="0.1"   />
+          <param name="Reg/Force3DoF"             type="string" value="true"  />
+          <param name="Reg/Strategy"              type="string" value="0"     />
+          <param name="Mem/IncrementalMemory"     type="string" value="true"  />
+
+          <!-- ICP parameters -->
+          <param name="Icp/VoxelSize"                 type="string" value="0.05"/>
+          <param name="Icp/MaxCorrespondenceDistance" type="string" value="0.1"/>
+    </node>
+  </group>
+
+  <node pkg="tf" type="static_transform_publisher" name="base_link_to_camera_link_broadcaster" args="0 0 0.6 0 0 0 1 locobot/base_link camera_link 100" />
+  <!-- <node pkg="tf" type="static_transform_publisher" name="locobot_camera_link_to_camera_link_broadcaster" args="0 0 0 0 0 0 1 locobot/camera_link camera_link 100" /> -->
+
+</launch>
