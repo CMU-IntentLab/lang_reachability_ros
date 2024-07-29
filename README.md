@@ -1,3 +1,37 @@
+# Installation for new users
+- initialize conda environment
+```bash
+conda create -n lang_ros python=3.9
+```
+- clone our repo
+```bash
+git clone git@github.com:leohmcs/lang_reachability_ros.git
+git clone git@github.com:CMU-IntentLab/lang-reachability.git
+```
+- build habitat-sim 0.3.1 from source code
+```bash
+git clone https://github.com/facebookresearch/habitat-sim.git
+cd habitat-sim
+pip install .
+cd ..
+```
+
+- install habitat-lab
+```bash
+git clone https://github.com/facebookresearch/habitat-lab.git
+cd habitat-lab
+pip install -e habitat-lab 
+cd ..
+```
+- install ros-noetic-desktop
+```bash
+# this adds the conda-forge channel to the new created environment configuration 
+conda config --env --add channels conda-forge
+# and the robostack channel
+conda config --env --add channels robostack-staging
+conda install ros-noetic-desktop
+```
+
 # Installation
 - create a new conda environment exactly equal to lang-reachability (say lang-reachability-ros) just to preserve the previous one in case things go wrong
 - install habitat and owl-vit dependencies using the env.yaml file we have
