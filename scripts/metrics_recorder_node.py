@@ -33,7 +33,7 @@ class MetricsRecorderNode:
         self.value_function_sub = rospy.Subscriber("value_function_at_state", PoseStamped, callback=self.value_function_callback)
         self.failure_sub = rospy.Subscriber("failure_at_state", PoseStamped, callback=self.failure_callback)
         # self.safety_override_sub = rospy.Subscriber()
-        self.planning_latency_sub = rospy.Subscriber()
+        # self.planning_latency_sub = rospy.Subscriber()
         self.nominal_planning_time_sub = rospy.Subscriber("nominal_planning_time", Float32, self.nominal_planning_time_callback)
         self.safe_planning_time_sub = rospy.Subscriber("safe_planning_time", Float32, callback=self.safe_planning_time_callback)
         self.brt_computation_time_sub = rospy.Subscriber("brt_computation_time", Float32, callback=self.brt_computation_time_callback)
@@ -45,7 +45,7 @@ class MetricsRecorderNode:
         time = msg.header.stamp.secs
         pos = msg.pose.pose.position
         quat = msg.pose.pose.orientation
-        euler = tft.euler_from_quaternion([quat[0], quat[1], quat[2], quat[3]])
+        euler = tft.euler_from_quaternion([quat.x, quat.y, quat.z, quat.w])
         pose = [pos.x, pos.y, euler[2], time]
         self.trajectory.append(pose)
 
@@ -72,7 +72,7 @@ class MetricsRecorderNode:
             self.combined_map_over_time = self.floorplan
         else:
             combined_map_now = np.reshape(msg.data, (msg.info.height, msg.info.width))
-            self.combined_map_over_time = np.stack((self.combined_map_over_time, combined_map_now), axis=-1)
+            self.combined_map_over_time = np.dstack((self.combined_map_over_time, combined_map_now))
 
     def nominal_planning_time_callback(self, msg: Float32):
         self.nominal_planning_time.append([msg.data, rospy.Time.now().secs])
@@ -88,7 +88,7 @@ class MetricsRecorderNode:
         if self.semantic_map_over_time is None:
             self.semantic_map_over_time = semantic_map_now
         else:
-            self.semantic_map_over_time = np.stack((self.semantic_map_over_time, semantic_map_now), axis=-1)
+            self.semantic_map_over_time = np.dstack((self.semantic_map_over_time, semantic_map_now))
         self.semantic_map_times.append(rospy.Time.now().secs)
 
     def text_queries_callback(self, msg: String):
@@ -114,10 +114,15 @@ class MetricsRecorderNode:
 
 
 rospy.init_node("metrics_recorder_node")
-node = MetricsRecorderNode()
+node = MetricsRecorderNode("/home/leo/riss_ws/src/lang_reachability_ros/experiments/hardware/scenario1")
 
+last_print = rospy.Time.now().secs
 rate = rospy.Rate(10)
 while not rospy.is_shutdown():
     rate.sleep()
 
+    if rospy.Time.now().secs - last_print > 5:
+       last_print = rospy.Time.now().secs 
+       print("I'm still alive and recording data!")
+       
 node.save_all_metrics()
