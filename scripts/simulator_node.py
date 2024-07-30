@@ -10,12 +10,13 @@ import cv_bridge
 import tf2_ros
 import tf.transformations
 import numpy as np
+import logging
+import argparse
 
 from std_msgs.msg import Header
 from geometry_msgs.msg import Pose, PoseStamped, Twist, Quaternion, TransformStamped, PoseWithCovarianceStamped
 from sensor_msgs.msg import CameraInfo, Image
 from nav_msgs.msg import Odometry, OccupancyGrid
-
 
 class SimulatorNode:
     def __init__(self, dataset_name, test_scene, test_scene_name, dt=0.01, init_x=0.0, init_y=0.0, init_theta=0.0) -> None:
@@ -41,6 +42,7 @@ class SimulatorNode:
         self.broadcaster = tf2_ros.StaticTransformBroadcaster()
         
         self.vel = [0.0, 0.0]
+        print('simulator node initialized')
 
     def goal_callback(self, msg: PoseStamped):
         # print(f"goal received: x={msg.pose.position.x}")
@@ -95,8 +97,6 @@ class SimulatorNode:
         K = self.sim.get_camera_intrinsics_mat()
         caminfo_msg = self._construct_camera_info_message(K)
         self.camera_info_pub.publish(caminfo_msg)
-
-
 
     def publish_rgb_img(self, img):
         header = Header()
@@ -247,6 +247,39 @@ class SimulatorNode:
 
         self.broadcaster.sendTransform(transform)
 
+    def setup_logger(self, log_file):
+        dir_path = str(Path(__file__).parent.parent)
+        logs_dir = os.path.join(dir_path, 'logs')
+        log_file_path = os.path.join(logs_dir, log_file)
+        Path(logs_dir).mkdir(exist_ok=True)
+
+        logger = logging.getLogger('command_node')
+        logger.setLevel(logging.INFO)
+
+        # Create file handler which logs even debug messages
+        fh = logging.FileHandler(log_file_path)
+        fh.setLevel(logging.INFO)
+
+        # Create console handler with a higher log level
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.INFO)
+
+        # Create formatter and add it to the handlers
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        fh.setFormatter(formatter)
+        ch.setFormatter(formatter)
+
+        # Add the handlers to the logger
+        logger.addHandler(fh)
+        logger.addHandler(ch)
+
+        # Capture logs from external libraries
+        logging.getLogger('habitat_sim').setLevel(logging.INFO)
+        logging.getLogger('habitat_sim').addHandler(fh)
+        logging.getLogger('habitat_sim').addHandler(ch)
+
+        return logger
+
 
 def setup_data():
     dir_path = str(Path(__file__).parent.parent)
@@ -272,12 +305,14 @@ def setup_data():
         test_scene = os.path.join(data_root, "hm3d/train", f"{test_scene_name}/{sub_title}.basis.glb")
     return dataset_name, test_scene, test_scene_name
 
-rospy.init_node("simulator")
-rate = rospy.Rate(10)
 
-dataset_name, test_scene, test_scene_name = setup_data()
-sim_node = SimulatorNode(dataset_name=dataset_name, test_scene=test_scene, test_scene_name=test_scene_name, init_x=0.5, init_y=3.5, init_theta=1.5)
+if __name__ == '__main__':
+    rospy.init_node("simulator")
+    rate = rospy.Rate(10)
 
-while not rospy.is_shutdown():
-    sim_node.update_sim()
-    rate.sleep()
+    dataset_name, test_scene, test_scene_name = setup_data()
+    sim_node = SimulatorNode(dataset_name=dataset_name, test_scene=test_scene, test_scene_name=test_scene_name, init_x=0.5, init_y=3.5, init_theta=1.5)
+
+    while not rospy.is_shutdown():
+        sim_node.update_sim()
+        rate.sleep()

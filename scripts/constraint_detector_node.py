@@ -89,6 +89,7 @@ class ConstraintDetectorNode:
 
     def update_constraints_map(self):
         if self.rgb_img is None or self.depth_img is None or self.robot_pose is None:
+            # print(self.rgb_img is None, self.depth_img is None, self.robot_pose is None)
             return
         
         rgb_img = np.copy(self.rgb_img)

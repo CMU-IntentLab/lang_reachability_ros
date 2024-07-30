@@ -1,19 +1,23 @@
 import rospy
 import torch
 import numpy as np
+import os
+import logging
+from pathlib import Path
 from nav_msgs.msg import Odometry, OccupancyGrid
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, Pose, Twist
 from std_msgs.msg import Float32
 from visualization_msgs.msg import Marker, MarkerArray
 from lang_reachability import navigator
 
+# dir_path = str(Path(__file__).parent.parent)
+# logs_dir = os.path.join(dir_path, 'logs')
+# if not os.path.exists(logs_dir):
+#     os.makedirs(logs_dir)
+# logging.basicConfig(filename=os.path.join(logs_dir, 'navigation_node.log'), level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
 class NavigationNode:
     def __init__(self):
-        self.odom_sub = rospy.Subscriber("odom", Odometry, callback=self.odom_callback)
-        self.pose_sub = rospy.Subscriber("/rtabmap/localization_pose", PoseWithCovarianceStamped, callback=self.pose_callback)
-        self.goal_sub = rospy.Subscriber("goal", PoseStamped, callback=self.goal_callback)
-        self.map_sub = rospy.Subscriber("floor_plan", OccupancyGrid, callback=self.map_callback)
-
         self.twist_pub = rospy.Publisher("nominal_cmd_vel", Twist, queue_size=1)
         self.marker_pub = rospy.Publisher("vis_trajectories", MarkerArray, queue_size=1)
         self.planning_time_pub = rospy.Publisher("nominal_planning_time", Float32, queue_size=10)
@@ -29,10 +33,18 @@ class NavigationNode:
 
         self._goal_thresh = 0.1
 
+    def initialize_subs(self):
+        self.odom_sub = rospy.Subscriber("odom", Odometry, callback=self.odom_callback)
+        self.pose_sub = rospy.Subscriber("/rtabmap/localization_pose", PoseWithCovarianceStamped, callback=self.pose_callback)
+        self.goal_sub = rospy.Subscriber("goal", PoseStamped, callback=self.goal_callback)
+        self.map_sub = rospy.Subscriber("/rtabmap/grid_map", OccupancyGrid, callback=self.map_callback)
+
     def _check_navigator_ready(self):
         if self._odom is not None and self._goal is not None and self._map is not None:
             self.navigator_ready = True
             print(f'begin navigation: goal: ({self._goal.pose.position.x}, {self._goal.pose.position.y})')
+        else:
+            print(f'data status for navigation: odom: {self._odom is not None}, goal: {self._goal is not None}, map: {self._map is not None}')
 
     def odom_callback(self, msg: Odometry) -> None:
         self._odom = msg
@@ -51,6 +63,7 @@ class NavigationNode:
             self._check_navigator_ready()  
 
     def map_callback(self, msg: OccupancyGrid) -> None:
+        print('map callback')
         self._map = msg
         map_data = msg.data
         map_dim = [msg.info.height, msg.info.width]
@@ -81,9 +94,13 @@ class NavigationNode:
     def publish_command(self):
         start_time = rospy.Time.now().secs
         v, w = self._navigator.get_command()
+
         time_taken = rospy.Time.now().secs - start_time
         self.planning_time_pub.publish(Float32(data=time_taken))
         # print(v, w)
+
+        print(f'commands: ({v.item()}, {w.item()})')
+
         twist = Twist()
 
         twist.linear.x = v
@@ -127,6 +144,8 @@ if __name__ == '__main__':
     rate = rospy.Rate(10)
     navigator_node = NavigationNode()
     rospy.sleep(2)
+    # wait for the navigator to be initialized before entering callbacks
+    navigator_node.initialize_subs()
 
     visualization = True
 
