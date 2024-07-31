@@ -31,21 +31,25 @@ def setup_logger(name, log_file, level=logging.INFO):
 
     return logger
 
-def enqueue_output(stream, queue):
+def enqueue_output(stream, queue, stream_type):
     """Helper function to enqueue output from a stream"""
     for line in iter(stream.readline, b''):
-        queue.put(line)
+        queue.put((line, stream_type))
     stream.close()
 
 def log_output(queue, logger):
     """Function to log output from a queue"""
     while True:
         try:
-            line = queue.get_nowait()
+            line, stream_type = queue.get_nowait()
         except Empty:
             continue
         else:
-            logger.info(line.decode().strip())
+            if stream_type == 'stdout':
+                logger.info(line.decode().strip())
+            elif stream_type == 'stderr':
+                logger.error(line.decode().strip())
+
 
 def start_node(command):
     return subprocess.Popen(command, shell=True, preexec_fn=os.setsid, stdout=subprocess.PIPE,
@@ -79,8 +83,8 @@ def start_modules(module_name_list, exp_config_path):
         logger.info(f"{node_name} started with PID {node.pid}")
         queue = Queue()
         node_list.append((node, logger, queue))
-        threading.Thread(target=enqueue_output, args=(node.stdout, queue), daemon=True).start()
-        threading.Thread(target=enqueue_output, args=(node.stderr, queue), daemon=True).start()
+        threading.Thread(target=enqueue_output, args=(node.stdout, queue, 'stdout'), daemon=True).start()
+        threading.Thread(target=enqueue_output, args=(node.stderr, queue, 'stderr'), daemon=True).start()
         threading.Thread(target=log_output, args=(queue, logger), daemon=True).start()
     return node_list
 
