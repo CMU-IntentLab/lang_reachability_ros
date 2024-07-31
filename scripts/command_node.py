@@ -1,38 +1,44 @@
 import rospy
 import tf2_ros
 import os
+import json
 import logging
 import tf.transformations
 import sys
+import argparse
 
 from pathlib import Path
 from geometry_msgs.msg import PoseStamped, Quaternion
 
 
 class CommandNode:
-    def __init__(self):
-        self.language_cmd = "avoid the rug" # TODO: handle for owl-vit
+    def __init__(self, args):
+        self.args = args
+        self.exp_config = self.make_exp_config()
         self.goal_pub = rospy.Publisher("goal", PoseStamped, queue_size=1)
-        # self.logger = self.setup_logger(log_file)
-        # self.logger.info('command node initialized')
+        self.goal = self.exp_config['goal']
         print("command node initialized")
 
+    def make_exp_config(self):
+        self.exp_path = self.args.exp_path
+        with open(self.exp_path, 'r') as f:
+            exp_config = json.load(f)
+        return exp_config
+
     def send_goal(self):
-        x = 3.5
-        y = 2
         theta = 0.0
         goal = PoseStamped()
         goal.header.stamp = rospy.Time.now()
         goal.header.frame_id = "odom"
 
-        goal.pose.position.x = x
-        goal.pose.position.y = y
+        goal.pose.position.x = self.goal[0]
+        goal.pose.position.y = self.goal[1]
         goal.pose.position.z = 0.0
 
         quat = tf.transformations.quaternion_from_euler(0, 0, theta)
         goal.pose.orientation = Quaternion(*quat)
         # self.logger.info(f"send goal: x={x}, y={y}, theta={theta}")
-        print(f"sending goal: x={x}, y={y}, theta={theta}")
+        print(f"sending goal: x={self.goal[0]}, y={self.goal[1]}, theta={theta}")
         self.goal_pub.publish(goal)
         rospy.sleep(1)
         # self.logger.info('goal published')
@@ -67,11 +73,15 @@ class CommandNode:
 
 
 if __name__ == '__main__':
-    print('test')
+    parser = argparse.ArgumentParser(description="Command Node")
+    parser.add_argument('--exp_path', type=str, default=None, help='path to experiment json file')
+    args = parser.parse_args()
+
+    assert args.exp_path is not None, "a experiment config file must be provided"
 
     rospy.init_node('command')
     rate = rospy.Rate(10)
-    cmd_node = CommandNode()
+    cmd_node = CommandNode(args)
 
     while not rospy.is_shutdown():
         cmd_node.send_goal()

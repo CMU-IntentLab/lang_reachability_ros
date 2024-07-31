@@ -2,3 +2,4 @@
 /scripts/__pycache__/*
 /.idea/*
 /logs/
+/results/*

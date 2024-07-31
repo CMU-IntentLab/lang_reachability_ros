@@ -1,0 +1,6 @@
+{
+  "exp_name": "mppi_vlm",
+  "text_queries": ["avoid the coffee spill", "avoid the rug"],
+  "constraints_thresholds": [0.12, 0.5],
+  "goal": [3, -2.5]
+}
