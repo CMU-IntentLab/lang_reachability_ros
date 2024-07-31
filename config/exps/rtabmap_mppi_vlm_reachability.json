@@ -1,4 +1,4 @@
 {
   "exp_name": "rtabmap_mppi_vlm_reachability",
-  "language_instruction": "avoid the coffee spill"
+  "text_queries": ["avoid the coffee spill"]
 }
