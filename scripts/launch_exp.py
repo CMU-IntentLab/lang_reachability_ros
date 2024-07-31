@@ -59,6 +59,8 @@ def shutdown(node_list):
     logging.info("Shutting down nodes...")
 
     for (node, logger, queue) in node_list:
+        logger.info(f"Shutting down node with PID: {node.pid}")
+        logger.info("=" * 50)  # Add a divide line to the logs
         os.killpg(os.getpgid(node.pid), signal.SIGTERM)
 
     logging.info("Nodes have been shut down.")

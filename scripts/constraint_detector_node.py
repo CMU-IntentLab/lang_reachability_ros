@@ -8,7 +8,9 @@ from lang_reachability import perception
 import rospy
 import cv_bridge
 import tf2_ros
+import json
 import tf.transformations
+import argparse
 
 from std_msgs.msg import String
 from nav_msgs.msg import OccupancyGrid
@@ -22,7 +24,9 @@ import cv2
 # - save previously detected constraints. self.__init_semantic_map is being called every time we receive a new map from rtabmap!!
 
 class ConstraintDetectorNode:
-    def __init__(self) -> None:
+    def __init__(self, args) -> None:
+        self.args = args
+        self.exp_config = self.make_exp_config()
         self.rgb_img = None
         self.depth_img = None
         self.robot_pose = None
@@ -38,8 +42,8 @@ class ConstraintDetectorNode:
         self.origin = None
         self.semantic_grid_map = None
         self.grid_map = None
-    
-        self.object_detector = perception.ObjectDetector(score_threshold=0.2)
+
+        self.object_detector = perception.ObjectDetector(score_threshold=0.2, init_queries=self.exp_config['text_queries'])
         self.bridge = cv_bridge.CvBridge()
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
@@ -57,6 +61,11 @@ class ConstraintDetectorNode:
 
         rospy.loginfo(f"Initialized VLM with the following language constraints: {self.object_detector.text_queries}")
 
+    def make_exp_config(self):
+        self.exp_path = self.args.exp_path
+        with open(self.exp_path, 'r') as f:
+            exp_config = json.load(f)
+        return exp_config
     def text_query_callback(self, msg: String):
         self.object_detector.add_new_text_query(msg.data)
         rospy.loginfo(f"Added '{msg.data}' to the list of language constraints. Current constraints are '{self.object_detector.text_queries}'.")
@@ -208,10 +217,17 @@ class ConstraintDetectorNode:
         msg.info.origin.orientation.w = 1.0
         return msg
 
-rospy.init_node("constraint_detector_node")
-node = ConstraintDetectorNode()
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Command Node")
+    parser.add_argument('--exp_path', type=str, default=None, help='path to experiment json file')
+    args = parser.parse_args()
 
-rate = rospy.Rate(10)
-while not rospy.is_shutdown():
-    node.update_constraints_map()
-    rate.sleep()
+    assert args.exp_path is not None, "a experiment config file must be provided"
+
+    rospy.init_node("constraint_detector_node")
+    node = ConstraintDetectorNode(args)
+
+    rate = rospy.Rate(10)
+    while not rospy.is_shutdown():
+        node.update_constraints_map()
+        rate.sleep()
