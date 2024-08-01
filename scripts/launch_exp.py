@@ -66,12 +66,12 @@ def shutdown(node_list):
     logging.info("Nodes have been shut down.")
     exit(0)
 
-def start_modules(module_name_list, exp_config_path):
+def start_modules(module_name_list, exp_config_path, topics_names_path):
     node_list = []
     module_to_node = {"mppi": "navigation_node",
                       "vlm": "constraint_detector_node",
                       "reachability": "safe_controller_node",
-                      "simulator_node": "simulator_node",
+                      "simulator": "simulator_node",
                       "command_node": "command_node",
                       "metrics_recorder_node": "metrics_recorder_node"}
 
@@ -81,7 +81,7 @@ def start_modules(module_name_list, exp_config_path):
         node_name = module_to_node[module]
         logger = setup_logger(node_name, f'{node_name}.log')
         logger.info(f"{node_name} logger setup complete")
-        node = start_node(f'python3 scripts/{node_name}.py --exp_path {exp_config_path}')
+        node = start_node(f'python3 scripts/{node_name}.py --exp_path {exp_config_path} --topics_path {topics_names_path}')
         logger.info(f"{node_name} started with PID {node.pid}")
         queue = Queue()
         node_list.append((node, logger, queue))
@@ -94,14 +94,19 @@ if __name__ == '__main__':
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
-    exp_name = "mppi_vlm"
+    exp_name = "rtabmap_mppi_vlm_reachability"
     exp_configs_path = os.path.join(dir_path, 'config', 'exps', f"{exp_name}.json")
     with open(exp_configs_path, 'r') as f:
         exp_configs = json.load(f)
 
+    topics_names_path = os.path.join(dir_path, 'config', 'exps', "topics_names.json")
+
     module_name_list = exp_configs['exp_name'].split('_')
-    module_name_list = ["simulator_node", "command_node", "metrics_recorder_node"] + module_name_list
-    node_list = start_modules(module_name_list, exp_configs_path)
+    platform = exp_configs["platform"]  # either simulator or hardware
+    module_name_list = ["command_node", "metrics_recorder_node"] + module_name_list
+    if platform == 'simulator':
+        module_name_list = module_name_list + [platform]
+    node_list = start_modules(module_name_list, exp_configs_path, topics_names_path)
 
     signal.signal(signal.SIGINT, lambda signum, frame: shutdown(node_list))
     signal.signal(signal.SIGTERM, lambda signum, frame: shutdown(node_list))
