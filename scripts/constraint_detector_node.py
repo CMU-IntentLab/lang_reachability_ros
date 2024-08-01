@@ -27,6 +27,7 @@ class ConstraintDetectorNode:
     def __init__(self, args) -> None:
         self.args = args
         self.exp_config = self.make_exp_config()
+        self.topics_names = self.make_topics_names()
         self.rgb_img = None
         self.depth_img = None
         self.robot_pose = None
@@ -48,16 +49,16 @@ class ConstraintDetectorNode:
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
 
-        self.vlm_detections_pub = rospy.Publisher("vlm_detections", Image, queue_size=10)
-        self.constaints_grid_map_pub = rospy.Publisher("constraints_grid_map", OccupancyGrid, queue_size=10)
-        self.semantic_grid_map_pub = rospy.Publisher("semantic_grid_map", OccupancyGrid, queue_size=10)
+        self.vlm_detections_pub = rospy.Publisher(self.topics_names["vlm_detections"], Image, queue_size=10)
+        self.constaints_grid_map_pub = rospy.Publisher(self.topics_names["constraints_grid_map"], OccupancyGrid, queue_size=10)
+        self.semantic_grid_map_pub = rospy.Publisher(self.topics_names["semantic_grid_map"], OccupancyGrid, queue_size=10)
 
-        self.text_query_sub = rospy.Subscriber("language_constraint", String, callback=self.text_query_callback)
-        self.grid_map_sub = rospy.Subscriber("/rtabmap/grid_map", OccupancyGrid, callback=self.grid_map_callback)
-        self.rgb_img_sub = rospy.Subscriber("rgb/image", Image, callback=self.rgb_img_callback)
-        self.depth_img_sub = rospy.Subscriber("depth/image", Image, callback=self.depth_img_callback)
-        self.camera_info_sub = rospy.Subscriber("rgb/camera_info", CameraInfo, callback=self.camera_info_callback)
-        self.robot_pose_sub = rospy.Subscriber("rtabmap/localization_pose", PoseWithCovarianceStamped, callback=self.robot_pose_callback)
+        self.text_query_sub = rospy.Subscriber(self.topics_names["language_constraint"], String, callback=self.text_query_callback)
+        self.grid_map_sub = rospy.Subscriber(self.topics_names["grid_map"], OccupancyGrid, callback=self.grid_map_callback)
+        self.rgb_img_sub = rospy.Subscriber(self.topics_names["rgb_image"], Image, callback=self.rgb_img_callback)
+        self.depth_img_sub = rospy.Subscriber(self.topics_names["depth_image"], Image, callback=self.depth_img_callback)
+        self.camera_info_sub = rospy.Subscriber(self.topics_names["camera_info"], CameraInfo, callback=self.camera_info_callback)
+        self.robot_pose_sub = rospy.Subscriber(self.topics_names["pose"], PoseWithCovarianceStamped, callback=self.robot_pose_callback)
 
         rospy.loginfo(f"Initialized VLM with the following language constraints: {self.object_detector.text_queries}")
 
@@ -66,6 +67,13 @@ class ConstraintDetectorNode:
         with open(self.exp_path, 'r') as f:
             exp_config = json.load(f)
         return exp_config
+    
+    def make_topics_names(self):
+        self.topics_path = self.args.topics_path
+        with open(self.topics_path, 'r') as f:
+            topics_names = json.load(f)
+        return topics_names
+
     def text_query_callback(self, msg: String):
         self.object_detector.add_new_text_query(msg.data)
         rospy.loginfo(f"Added '{msg.data}' to the list of language constraints. Current constraints are '{self.object_detector.text_queries}'.")
@@ -220,9 +228,11 @@ class ConstraintDetectorNode:
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Command Node")
     parser.add_argument('--exp_path', type=str, default=None, help='path to experiment json file')
+    parser.add_argument('--topics_path', type=str, default=None, help='path to ROS topics names json file')
     args = parser.parse_args()
 
     assert args.exp_path is not None, "a experiment config file must be provided"
+    assert args.topics_path is not None, "topics names json file must be provided"
 
     rospy.init_node("constraint_detector_node")
     node = ConstraintDetectorNode(args)

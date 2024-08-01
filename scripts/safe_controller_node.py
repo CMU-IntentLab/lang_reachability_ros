@@ -1,8 +1,10 @@
 # !/usr/bin/env python
+import argparse
+import json
 
 import rospy
 
-from geometry_msgs.msg import Twist, PoseWithCovarianceStamped, PoseStamped
+from geometry_msgs.msg import Twist, PoseWithCovarianceStamped, PoseStamped, Pose
 from nav_msgs.msg import OccupancyGrid, Odometry
 from std_msgs.msg import Float32
 
@@ -14,7 +16,10 @@ from lang_reachability import reachability
 
 
 class SafeControllerNode:
-    def __init__(self) -> None:
+    def __init__(self, args) -> None:
+        self.args = args
+        self.topics_names = self.make_topics_names()
+
         self.reachability_solver = None
         self.robot_pose = None
         self.map_resolution = -1
@@ -24,17 +29,30 @@ class SafeControllerNode:
         self.last_updated = -1
         self.brt_computed = False
 
-        self.robot_pose_sub = rospy.Subscriber("/rtabmap/localization_pose", PoseWithCovarianceStamped, callback=self.robot_pose_callback)
-        self.nominal_action_sub = rospy.Subscriber("nominal_cmd_vel", Twist, queue_size=1, callback=self.nominal_action_callback)
-        self.floorplan_sub = rospy.Subscriber("/rtabmap/grid_map", OccupancyGrid, callback=self.floorplan_callback)
-        self.semantic_map_sub = rospy.Subscriber("semantic_grid_map", OccupancyGrid, callback=self.semantic_map_callback)
+        self.robot_pose_sub = rospy.Subscriber(self.topics_names["pose"], PoseWithCovarianceStamped, callback=self.robot_pose_callback)
+        self.nominal_action_sub = rospy.Subscriber(self.topics_names["nominal_action"], Twist, queue_size=1, callback=self.nominal_action_callback)
+        self.floorplan_sub = rospy.Subscriber(self.topics_names["grid_map"], OccupancyGrid, callback=self.floorplan_callback)
+        self.semantic_map_sub = rospy.Subscriber(self.topics_names["semantic_grid_map"], OccupancyGrid, callback=self.semantic_map_callback)
 
-        self.safe_action_pub = rospy.Publisher("cmd_vel", Twist, queue_size=1)
-        self.value_function_pub = rospy.Publisher("value_function_at_state", PoseStamped, queue_size=10)
-        self.failure_pub = rospy.Publisher("failure_set_value", PoseStamped, queue_size=10)
-        self.safe_planning_time_pub = rospy.Publisher("safe_planning_time", Float32, queue_size=10)
-        self.brt_computation_time_pub = rospy.Publisher("brt_computation_time", Float32, queue_size=10)
+        self.constraints_map_pub = rospy.Publisher(self.topics_names["constraints_grid_map"], OccupancyGrid, queue_size=10)
+        self.safe_action_pub = rospy.Publisher(self.topics_names["safe_action"], Twist, queue_size=1)
+        self.value_function_pub = rospy.Publisher(self.topics_names["value_function_at_state"], PoseStamped, queue_size=10)
+        self.failure_pub = rospy.Publisher(self.topics_names["failure_set_at_state"], PoseStamped, queue_size=10)
+        self.safe_planning_time_pub = rospy.Publisher(self.topics_names["safe_planning_time"], Float32, queue_size=10)
+        self.brt_computation_time_pub = rospy.Publisher(self.topics_names["brt_computation_time"], Float32, queue_size=10)
 
+    def make_exp_config(self):
+        self.exp_path = self.args.exp_path
+        with open(self.exp_path, 'r') as f:
+            exp_config = json.load(f)
+        return exp_config
+    
+    def make_topics_names(self):
+        self.topics_path = self.args.topics_path
+        with open(self.topics_path, 'r') as f:
+            topics_names = json.load(f)
+        return topics_names
+    
     def robot_pose_callback(self, msg: PoseWithCovarianceStamped):
         pos = msg.pose.pose.position
         quat = msg.pose.pose.orientation
@@ -67,10 +85,13 @@ class SafeControllerNode:
 
     def semantic_map_callback(self, msg: OccupancyGrid):
         self.semantic_grid_map = np.reshape(msg.data, (msg.info.height, msg.info.width))
+        constraints_map = self.merge_maps()
+        msg = self._construct_occupancy_grid_msg(constraints_map)
+        self.constraints_map_pub.publish(msg)
 
     def compute_brt(self):
         if self.reachability_solver is None:
-            rospy.logerr("Reachability solver was not initialized yet. Cannot compute BRT.")
+            rospy.logwarn("Reachability solver was not initialized yet. Cannot compute BRT.")
             return
         
         if not self.brt_computed:
@@ -94,7 +115,7 @@ class SafeControllerNode:
 
     def compute_safe_control(self, nominal_action):
         if self.robot_pose is None:
-            rospy.logerr("Robot pose was not received. Cannot compute safe action.")
+            rospy.logwarn("Robot pose was not received. Cannot compute safe action.")
             return nominal_action
         
         start_time = rospy.Time.now().secs
@@ -117,7 +138,7 @@ class SafeControllerNode:
 
     def _init_reachability_solver(self):
         if self.grid_map is None:
-            rospy.logerr("Map was not received. Cannot initialize solver.")
+            rospy.logwarn("Map was not received. Cannot initialize solver.")
             return
         
         size_y = self.grid_map.shape[0] * self.map_resolution
@@ -128,6 +149,18 @@ class SafeControllerNode:
         self.reachability_solver = reachability.ReachabilitySolver(system="unicycle3d", 
                                                                 domain=[[domain_low[0], domain_low[1]],[domain_high[0], domain_high[1]]], 
                                                                 mode="brt", accuracy="low")
+
+    def _construct_occupancy_grid_msg(self, map_data: np.array):
+        msg = OccupancyGrid()
+        origin = Pose()
+        origin.position.x = self.map_origin[0]
+        origin.position.y = self.map_origin[1]
+        msg.info.origin = origin
+        msg.info.resolution = self.map_resolution
+        msg.info.height = map_data.shape[0]
+        msg.info.width = map_data.shape[1]
+        msg.data = map_data.flatten()
+        return msg
 
     def _construct_twist_msg(self, action):
         """
@@ -154,20 +187,29 @@ class SafeControllerNode:
         return msg
 
 
-rospy.init_node("safe_controller_node")
-# floorplan = np.load("/home/leo/git/hj_reachability/top_down_map.npy")
-solver_node = SafeControllerNode()
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Command Node")
+    parser.add_argument('--exp_path', type=str, default=None, help='path to experiment json file')
+    parser.add_argument('--topics_path', type=str, default=None, help='path to ROS topics names json file')
+    args = parser.parse_args()
 
-# enforce first BRT computation
-while not solver_node.brt_computed and not rospy.is_shutdown():
-    solver_node.compute_brt()
-    rospy.sleep(2)
+    assert args.exp_path is not None, "a experiment config file must be provided"
+    assert args.topics_path is not None, "topics names json file must be provided"
 
+    rospy.init_node("safe_controller_node")
+    # floorplan = np.load("/home/leo/git/hj_reachability/top_down_map.npy")
+    solver_node = SafeControllerNode(args)
 
-brt_update_interval = 15
-rate = rospy.Rate(10)
-while not rospy.is_shutdown():
-    if rospy.Time.now().secs - solver_node.last_updated >= brt_update_interval:
+    # enforce first BRT computation
+    while not solver_node.brt_computed and not rospy.is_shutdown():
         solver_node.compute_brt()
+        rospy.sleep(2)
 
-    rate.sleep()
+
+    brt_update_interval = 15
+    rate = rospy.Rate(10)
+    while not rospy.is_shutdown():
+        if rospy.Time.now().secs - solver_node.last_updated >= brt_update_interval:
+            solver_node.compute_brt()
+
+        rate.sleep()

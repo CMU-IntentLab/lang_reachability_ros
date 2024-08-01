@@ -9,6 +9,8 @@ from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, Pose, Twis
 from std_msgs.msg import Float32
 from visualization_msgs.msg import Marker, MarkerArray
 from lang_reachability import navigator
+import argparse
+import json
 
 # dir_path = str(Path(__file__).parent.parent)
 # logs_dir = os.path.join(dir_path, 'logs')
@@ -17,10 +19,13 @@ from lang_reachability import navigator
 # logging.basicConfig(filename=os.path.join(logs_dir, 'navigation_node.log'), level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class NavigationNode:
-    def __init__(self):
-        self.twist_pub = rospy.Publisher("nominal_cmd_vel", Twist, queue_size=1)
-        self.marker_pub = rospy.Publisher("vis_trajectories", MarkerArray, queue_size=1)
-        self.planning_time_pub = rospy.Publisher("nominal_planning_time", Float32, queue_size=10)
+    def __init__(self, args):
+        self.args = args
+        self.topics_names = self.make_topics_names()
+
+        self.twist_pub = rospy.Publisher(self.topics_names["nominal_action"], Twist, queue_size=1)
+        self.marker_pub = rospy.Publisher(self.topics_names["trajectory_visualization"], MarkerArray, queue_size=1)
+        self.planning_time_pub = rospy.Publisher(self.topics_names["nominal_planning_time"], Float32, queue_size=10)
 
         self._device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         self._dtype = torch.float32
@@ -33,11 +38,17 @@ class NavigationNode:
 
         self._goal_thresh = 0.1
 
+    def make_topics_names(self):
+        self.topics_path = self.args.topics_path
+        with open(self.topics_path, 'r') as f:
+            topics_names = json.load(f)
+        return topics_names
+    
     def initialize_subs(self):
-        self.odom_sub = rospy.Subscriber("odom", Odometry, callback=self.odom_callback)
-        self.pose_sub = rospy.Subscriber("/rtabmap/localization_pose", PoseWithCovarianceStamped, callback=self.pose_callback)
-        self.goal_sub = rospy.Subscriber("goal", PoseStamped, callback=self.goal_callback)
-        self.map_sub = rospy.Subscriber("/rtabmap/grid_map", OccupancyGrid, callback=self.map_callback)
+        self.odom_sub = rospy.Subscriber(self.topics_names["odom"], Odometry, callback=self.odom_callback)
+        self.pose_sub = rospy.Subscriber(self.topics_names["pose"], PoseWithCovarianceStamped, callback=self.pose_callback)
+        self.goal_sub = rospy.Subscriber(self.topics_names["goal"], PoseStamped, callback=self.goal_callback)
+        self.map_sub = rospy.Subscriber(self.topics_names["constraints_grid_map"], OccupancyGrid, callback=self.map_callback)
 
     def _check_navigator_ready(self):
         if self._odom is not None and self._goal is not None and self._map is not None:
@@ -142,7 +153,15 @@ class NavigationNode:
 if __name__ == '__main__':
     rospy.init_node('navigation_node')
     rate = rospy.Rate(10)
-    navigator_node = NavigationNode()
+
+    parser = argparse.ArgumentParser(description="Command Node")
+    parser.add_argument('--exp_path', type=str, default=None, help='path to experiment json file')
+    parser.add_argument('--topics_path', type=str, default=None, help='path to ROS topics names json file')
+    args = parser.parse_args()
+
+    assert args.topics_path is not None, "topics names json file must be provided"
+
+    navigator_node = NavigationNode(args)
     rospy.sleep(2)
     # wait for the navigator to be initialized before entering callbacks
     navigator_node.initialize_subs()
