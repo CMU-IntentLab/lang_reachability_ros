@@ -1,0 +1,7 @@
+{
+  "exp_name": "rtabmap_mppi_vlm_reachability",
+  "platform": "simulator",
+  "text_queries": ["avoid the coffee spill"],
+  "goal": [3, 6],
+  "results_path": "/home/leo/riss_ws/src/lang_reachability_ros/experiments/hardware/scenario1"
+}

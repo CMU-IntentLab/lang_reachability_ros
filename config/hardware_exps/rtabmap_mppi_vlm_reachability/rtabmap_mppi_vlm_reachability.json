@@ -1,6 +1,8 @@
 {
   "exp_name": "rtabmap_mppi_vlm_reachability",
-  "platform": "simulator",
-  "text_queries": ["avoid the coffee spill"],
+  "platform": "hardware",
+  "goal": [4, -5],
+  "text_queries": ["avoid the rug"],
+  "score_threshold": 0.1,
   "results_path": "/home/leo/riss_ws/src/lang_reachability_ros/experiments/hardware/scenario1"
 }

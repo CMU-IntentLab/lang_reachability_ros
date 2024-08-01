@@ -1,6 +1,0 @@
-{
-    "exp_name": "rtabmap_reachability",
-    "platform": "simulator",
-    "goal": [3.5, -5],
-    "results_path": "/home/leo/riss_ws/src/lang_reachability_ros/experiments/hardware/scenario1"
-  }

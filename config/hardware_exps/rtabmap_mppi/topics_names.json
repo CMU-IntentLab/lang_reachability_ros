@@ -1,0 +1,29 @@
+{
+    "ground_truth_pose": "/gt_pose",
+    "odom": "/locobot/mobile_base/odom",
+    "pose": "/rtabmap/localization_pose",
+    "sim_global_pose": "/global_pose",
+
+    "rgb_image": "/camera/rgb/image",
+    "depth_image": "/camera/depth/image",
+    "camera_info": "/camera/rgb/camera_info",
+
+    "language_constraint": "NA",
+    "vlm_detections": "NA",
+
+    "goal": "/goal",
+    "nominal_action": "/locobot/mobile_base/commands/velocity",
+    "safe_action": "NA",
+    "trajectory_visualization": "/vis_trajectories",
+
+    "floor_plan": "/floor_plan",
+    "grid_map": "/rtabmap/grid_map",
+    "semantic_grid_map": "NA",
+    "constraints_grid_map": "NA",
+
+    "value_function_at_state": "/data/value_function_at_state",
+    "failure_set_at_state": "/data/failure_set_at_state",
+    "nominal_planning_time": "/data/nominal_planning_time",
+    "safe_planning_time": "/data/safe_planning_time",
+    "brt_computation_time": "/data/brt_computation_time"
+}
