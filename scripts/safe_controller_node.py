@@ -65,9 +65,9 @@ class SafeControllerNode:
             safe_action, value, initial_value = self.compute_safe_control(nominal_action)
             safe_action_msg = self._construct_twist_msg(safe_action)
             self.safe_action_pub.publish(safe_action_msg)
-            value_function_msg = self._construct_pose_stamped_msg([self.robot_pose[0], self.robot_pose[1], value])
+            value_function_msg = self._construct_pose_stamped_msg([self.robot_pose[0], self.robot_pose[1], value], [0.0, 0.0, self.robot_pose[2]])
             self.value_function_pub.publish(value_function_msg)
-            failure_msg = self._construct_pose_stamped_msg([self.robot_pose[0], self.robot_pose[1], initial_value])
+            failure_msg = self._construct_pose_stamped_msg([self.robot_pose[0], self.robot_pose[1], initial_value], [0.0, 0.0, self.robot_pose[2]])
             self.failure_pub.publish(failure_msg)
         else:
             # rospy.logwarn("BRT was not computed yet. Sending 0 velocity!")
@@ -174,8 +174,6 @@ class SafeControllerNode:
     def _construct_pose_stamped_msg(self, pos, ori):
         """
         construct geometry_msgs/Pose assuming pos = [x, y, z], ori = [roll, pitch, yaw]
-        
-        TODO: include orientation
         """
         quat = tft.quaternion_from_euler(ori)
         msg = PoseStamped()
