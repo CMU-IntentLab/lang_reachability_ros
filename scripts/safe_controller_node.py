@@ -146,9 +146,11 @@ class SafeControllerNode:
         domain_low = self.map_origin
         domain_high = domain_low + np.array([size_x, size_y])
         rospy.loginfo(f"domain = {domain_low, domain_high}")
+        converged_values = np.load("/home/leo/riss_ws/src/lang_reachability_ros/lab_value_function.npy")
         self.reachability_solver = reachability.ReachabilitySolver(system="unicycle3d", 
-                                                                domain=[[domain_low[0], domain_low[1]],[domain_high[0], domain_high[1]]], 
-                                                                mode="brt", accuracy="low")
+                                                                    domain=[[domain_low[0], domain_low[1]],[domain_high[0], domain_high[1]]],
+                                                                    converged_values=None,
+                                                                    mode="brt", accuracy="low")
 
     def _construct_occupancy_grid_msg(self, map_data: np.array):
         msg = OccupancyGrid()
@@ -175,7 +177,7 @@ class SafeControllerNode:
         """
         construct geometry_msgs/Pose assuming pos = [x, y, z], ori = [roll, pitch, yaw]
         """
-        quat = tft.quaternion_from_euler(ori)
+        quat = tft.quaternion_from_euler(ai=ori[0], aj=ori[1], ak=ori[2])
         msg = PoseStamped()
         msg.header.stamp = rospy.Time.now()
         msg.pose.position.x = pos[0]
@@ -208,7 +210,7 @@ if __name__ == '__main__':
         rospy.sleep(2)
 
 
-    brt_update_interval = 15
+    brt_update_interval = 5
     rate = rospy.Rate(10)
     while not rospy.is_shutdown():
         if rospy.Time.now().secs - solver_node.last_updated >= brt_update_interval:
