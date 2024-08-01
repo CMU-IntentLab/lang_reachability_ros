@@ -106,13 +106,14 @@ class ConstraintDetectorNode:
 
     def update_constraints_map(self):
         if self.rgb_img is None or self.depth_img is None or self.robot_pose is None:
-            # print(self.rgb_img is None, self.depth_img is None, self.robot_pose is None)
+            print(f"vlm status: rgb_img={self.rgb_img is not None}, depth_img={self.depth_img is not None}, robot_pose={self.robot_pose is not None}")
             return
         
         rgb_img = np.copy(self.rgb_img)
         detections = self.object_detector.detect(rgb_img)
         K_inv = self.get_inv_camera_intrinsics_matrix()
         T_inv = self.get_inv_camera_extrinsics_matrix()
+        # print(f"T_inv={T_inv}")
         for bbox, label in detections:
             x_occ, y_occ = self.object_detector.estimate_object_position(self.robot_pose, self.depth_img, bbox, K_inv, T_inv, threshold=10)
             row, col = self.__position_to_cell(x_occ, y_occ)
