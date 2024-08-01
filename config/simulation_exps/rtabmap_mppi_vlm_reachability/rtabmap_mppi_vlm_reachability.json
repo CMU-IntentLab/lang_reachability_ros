@@ -1,0 +1,8 @@
+{
+  "exp_name": "rtabmap_mppi_vlm_reachability",
+  "platform": "simulator",
+  "goal": [4, 0.0],
+  "text_queries": ["stay away from the rug"],
+  "score_threshold": 0.1,
+  "results_path": "/home/zli133/shared/ml_projects/lang_reachability_ros/results/rtabmap_mppi_vlm_reachability"
+}
