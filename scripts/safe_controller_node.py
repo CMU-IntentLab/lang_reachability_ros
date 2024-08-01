@@ -146,10 +146,9 @@ class SafeControllerNode:
         domain_low = self.map_origin
         domain_high = domain_low + np.array([size_x, size_y])
         rospy.loginfo(f"domain = {domain_low, domain_high}")
-        converged_values = np.load("/home/leo/riss_ws/src/lang_reachability_ros/lab_value_function.npy")
+        # converged_values = np.load("/home/leo/riss_ws/src/lang_reachability_ros/lab_value_function.npy")
         self.reachability_solver = reachability.ReachabilitySolver(system="unicycle3d", 
                                                                     domain=[[domain_low[0], domain_low[1]],[domain_high[0], domain_high[1]]],
-                                                                    converged_values=None,
                                                                     mode="brt", accuracy="low")
 
     def _construct_occupancy_grid_msg(self, map_data: np.array):
