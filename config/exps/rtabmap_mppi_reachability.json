@@ -1,3 +1,9 @@
 {
-  "exp_name": "rtabmap_mppi_reachability"
+  "exp_name": "rtabmap_mppi_reachability",
+  "platform": "simulator",
+  "goal": [3.5, -5],
+  "system": "unicycle3d",
+  "mode": "brt",
+  "accuracy": "low",
+  "results_path": "/home/leo/riss_ws/src/lang_reachability_ros/experiments/hardware/scenario1"
 }

@@ -1,6 +1,8 @@
 {
   "exp_name": "mppi_vlm",
+  "platform": "simulator",
   "text_queries": ["avoid the coffee spill", "avoid the rug"],
   "constraints_thresholds": [0.12, 0.5],
-  "goal": [3, -2.5]
+  "goal": [3, -2.5],
+  "results_path": "/home/leo/riss_ws/src/lang_reachability_ros/experiments/hardware/scenario1"
 }

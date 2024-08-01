@@ -1,3 +1,6 @@
 {
-  "exp_name": "mppi"
+  "exp_name": "mppi",
+  "platform": "simulator",
+  "goal": [2, 6],
+  "results_path": "/home/leo/riss_ws/src/lang_reachability_ros/experiments/hardware/scenario1"
 }
