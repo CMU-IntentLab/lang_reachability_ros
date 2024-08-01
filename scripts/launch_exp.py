@@ -95,11 +95,11 @@ if __name__ == '__main__':
         os.makedirs(log_dir)
 
     exp_name = "rtabmap_mppi_vlm_reachability"
-    exp_configs_path = os.path.join(dir_path, 'config', 'exps', f"{exp_name}.json")
+    exp_configs_path = os.path.join(dir_path, 'config', 'hardware_exps', exp_name, f"{exp_name}.json")
     with open(exp_configs_path, 'r') as f:
         exp_configs = json.load(f)
 
-    topics_names_path = os.path.join(dir_path, 'config', 'exps', "topics_names.json")
+    topics_names_path = os.path.join(dir_path, 'config', 'hardware_exps', exp_name, "topics_names.json")
 
     module_name_list = exp_configs['exp_name'].split('_')
     platform = exp_configs["platform"]  # either simulator or hardware

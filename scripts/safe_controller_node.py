@@ -70,8 +70,8 @@ class SafeControllerNode:
             failure_msg = self._construct_pose_stamped_msg([self.robot_pose[0], self.robot_pose[1], initial_value])
             self.failure_pub.publish(failure_msg)
         else:
-            rospy.logwarn("BRT was not computed yet. Not protecting against nominal action!")
-            nominal_action = np.array([msg.linear.x, msg.angular.z])
+            # rospy.logwarn("BRT was not computed yet. Sending 0 velocity!")
+            nominal_action = np.array([0, 0])
             nominal_action_msg = self._construct_twist_msg(nominal_action)
             self.safe_action_pub.publish(nominal_action_msg)
 
@@ -93,16 +93,16 @@ class SafeControllerNode:
         if self.reachability_solver is None:
             rospy.logwarn("Reachability solver was not initialized yet. Cannot compute BRT.")
             return
-        
+
+        constraints_grid_map = self.merge_maps()
+        constraints_grid_map = 1 - np.abs(constraints_grid_map)     # make -1 = occupied, 0 = occupied, 1 = free
+        rospy.loginfo(f"grid map shape = {np.shape(constraints_grid_map)}")
+
         if not self.brt_computed:
             rospy.loginfo("Computing initial BRT. This may (it probably will) take a while.")
         else:
             rospy.loginfo("Computing warm-started BRT.")
 
-        constraints_grid_map = self.merge_maps()
-        constraints_grid_map = 1 - constraints_grid_map     # make 0 = occupied, 1 = free
-        rospy.loginfo(f"grid map shape = {np.shape(constraints_grid_map)}")
-        
         start_time = rospy.Time.now().secs
         self.values = self.reachability_solver.solve(constraints_grid_map)
         end_time = rospy.Time.now().secs
@@ -119,10 +119,10 @@ class SafeControllerNode:
             return nominal_action
         
         start_time = rospy.Time.now().secs
-        safe_action, value = self.reachability_solver.compute_safe_control(self.robot_pose, nominal_action)
+        safe_action, value, initial_values = self.reachability_solver.compute_safe_control(self.robot_pose, nominal_action)
         time_taken = rospy.Time.now().secs - start_time
         self.safe_planning_time_pub.publish(Float32(data=time_taken))
-        return safe_action, value
+        return safe_action, value, initial_values
     
     def merge_maps(self):
         """
@@ -177,13 +177,17 @@ class SafeControllerNode:
         
         TODO: include orientation
         """
+        quat = tft.quaternion_from_euler(ori)
         msg = PoseStamped()
         msg.header.stamp = rospy.Time.now()
         msg.pose.position.x = pos[0]
         msg.pose.position.y = pos[1]
         msg.pose.position.z = pos[2]
         
-        msg.pose.orientation.w = 1.0
+        msg.pose.orientation.x = quat[0]
+        msg.pose.orientation.y = quat[1]
+        msg.pose.orientation.z = quat[2]
+        msg.pose.orientation.w = quat[3]
         return msg
 
 

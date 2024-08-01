@@ -11,6 +11,7 @@ from nav_msgs.msg import OccupancyGrid
 import tf.transformations as tft
 
 import numpy as np
+import datetime
 
 import argparse
 import json
@@ -50,8 +51,7 @@ class MetricsRecorderNode:
         self.language_queries_sub = rospy.Subscriber(self.topics_names["language_constraint"], String, callback=self.text_queries_callback)
 
     def make_exp_config(self):
-        # self.exp_path = self.args.exp_path
-        self.exp_path = '/home/leo/riss_ws/src/lang_reachability_ros/config/exps/rtabmap_mppi.json'
+        self.exp_path = self.args.exp_path
         with open(self.exp_path, 'r') as f:
             exp_config = json.load(f)
         return exp_config
@@ -119,20 +119,23 @@ class MetricsRecorderNode:
         self.text_queries.append(query)
 
     def save_all_metrics(self):
-        np.save(os.path.join(self.save_path, "trajectory.npy"), self.trajectory)
-        np.save(os.path.join(self.save_path, "value_function_at_state.npy"), self.value_function_at_state)
-        np.save(os.path.join(self.save_path, "failure_at_state.npy"), self.failure_at_state)
-        np.save(os.path.join(self.save_path, "nominal_planning_time.npy"), self.nominal_planning_time)
-        np.save(os.path.join(self.save_path, "safe_planning_time.npy"), self.safe_planning_time)
-        np.save(os.path.join(self.save_path, "brt_computation_time.npy"), self.brt_computation_time)
-        np.save(os.path.join(self.save_path, "map_size_meters.npy"), self.map_size_meters)
-        np.save(os.path.join(self.save_path, "floorplan.npy"), self.floorplan)
-        np.save(os.path.join(self.save_path, "combined_map_over_time.npy"), self.combined_map_over_time)
-        np.save(os.path.join(self.save_path, "semantic_map_over_time.npy"), self.semantic_map_over_time)
-        np.save(os.path.join(self.save_path, "semantic_map_times.npy"), self.semantic_map_times)
-        np.save(os.path.join(self.save_path, "combined_times.npy"), self.combined_times)
+        now = datetime.datetime.now()
+        now = now.strftime("%Y-%m-%d-%H:%M:%S")
+        os.makedirs(os.path.join(self.save_path, now))
+        np.save(os.path.join(self.save_path, now, "trajectory.npy"), self.trajectory)
+        np.save(os.path.join(self.save_path, now, "value_function_at_state.npy"), self.value_function_at_state)
+        np.save(os.path.join(self.save_path, now, "failure_at_state.npy"), self.failure_at_state)
+        np.save(os.path.join(self.save_path, now, "nominal_planning_time.npy"), self.nominal_planning_time)
+        np.save(os.path.join(self.save_path, now, "safe_planning_time.npy"), self.safe_planning_time)
+        np.save(os.path.join(self.save_path, now, "brt_computation_time.npy"), self.brt_computation_time)
+        np.save(os.path.join(self.save_path, now, "map_size_meters.npy"), self.map_size_meters)
+        np.save(os.path.join(self.save_path, now, "floorplan.npy"), self.floorplan)
+        np.save(os.path.join(self.save_path, now, "combined_map_over_time.npy"), self.combined_map_over_time)
+        np.save(os.path.join(self.save_path, now, "semantic_map_over_time.npy"), self.semantic_map_over_time)
+        np.save(os.path.join(self.save_path, now, "semantic_map_times.npy"), self.semantic_map_times)
+        np.save(os.path.join(self.save_path, now, "combined_times.npy"), self.combined_times)
 
-        with open(os.path.join(self.save_path, "text_queries.txt"), "w") as file:
+        with open(os.path.join(self.save_path, now, "text_queries.txt"), "w") as file:
             for query in self.text_queries:
                 file.write(query + "\n")
 

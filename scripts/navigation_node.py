@@ -45,10 +45,10 @@ class NavigationNode:
         return topics_names
     
     def initialize_subs(self):
-        self.odom_sub = rospy.Subscriber(self.topics_names["odom"], Odometry, callback=self.odom_callback)
+        # self.odom_sub = rospy.Subscriber(self.topics_names["odom"], Odometry, callback=self.odom_callback)
         self.pose_sub = rospy.Subscriber(self.topics_names["pose"], PoseWithCovarianceStamped, callback=self.pose_callback)
         self.goal_sub = rospy.Subscriber(self.topics_names["goal"], PoseStamped, callback=self.goal_callback)
-        self.map_sub = rospy.Subscriber(self.topics_names["constraints_grid_map"], OccupancyGrid, callback=self.map_callback)
+        self.map_sub = rospy.Subscriber(self.topics_names["grid_map"], OccupancyGrid, callback=self.map_callback)
 
     def _check_navigator_ready(self):
         if self._odom is not None and self._goal is not None and self._map is not None:
@@ -57,16 +57,17 @@ class NavigationNode:
         else:
             print(f'data status for navigation: odom: {self._odom is not None}, goal: {self._goal is not None}, map: {self._map is not None}')
 
-    def odom_callback(self, msg: Odometry) -> None:
-        self._odom = msg
-        # pos = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z]
-        # quat = [msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w]
-        # self._navigator.set_odom(position=pos, orientation=quat)
-        # if not self.navigator_ready:
-        #     self._check_navigator_ready()
+    # def odom_callback(self, msg: Odometry) -> None:
+    #     self._odom = msg
+    #     pos = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z]
+    #     quat = [msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w]
+    #     self._navigator.set_odom(position=pos, orientation=quat)
+    #     if not self.navigator_ready:
+    #         self._check_navigator_ready()
     
     def pose_callback(self, msg: PoseWithCovarianceStamped):
-        # self._odom = msg
+        self._odom = Odometry()
+        self._odom.pose = msg.pose
         pos = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z]
         quat = [msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w]
         self._navigator.set_odom(position=pos, orientation=quat)
@@ -109,8 +110,6 @@ class NavigationNode:
         time_taken = rospy.Time.now().secs - start_time
         self.planning_time_pub.publish(Float32(data=time_taken))
         # print(v, w)
-
-        print(f'commands: ({v.item()}, {w.item()})')
 
         twist = Twist()
 
