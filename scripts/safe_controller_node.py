@@ -71,6 +71,7 @@ class SafeControllerNode:
             self.failure_pub.publish(failure_msg)
         else:
             # rospy.logwarn("BRT was not computed yet. Sending 0 velocity!")
+            rospy.loginfo("BRT not finished yet")
             nominal_action = np.array([0, 0])
             nominal_action_msg = self._construct_twist_msg(nominal_action)
             self.safe_action_pub.publish(nominal_action_msg)
