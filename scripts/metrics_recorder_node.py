@@ -138,6 +138,8 @@ class MetricsRecorderNode:
         with open(os.path.join(self.save_path, now, "text_queries.txt"), "w") as file:
             for query in self.text_queries:
                 file.write(query + "\n")
+        with open(os.path.join(self.save_path, now, "exp_config.json"), "w") as file:
+            json.dump(self.exp_config, file)
 
     def get_time_since_start(self):
         return rospy.Time.now().secs - self.start_time
