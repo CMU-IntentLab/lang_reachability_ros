@@ -1,5 +1,5 @@
 <launch>
-   <arg name="database_path" default="/home/zli133/shared/ml_projects/lang_reachability_ros/maps/rtabmap_102344094.db>
+   <arg name="database_path" default="/home/zli133/shared/ml_projects/lang_reachability_ros/maps/rtabmap_102344094.db" />
    
    <group ns="rtabmap">
       <node name="rtabmap" pkg="rtabmap_slam" type="rtabmap" output="screen">
