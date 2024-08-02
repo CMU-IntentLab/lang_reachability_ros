@@ -1,6 +1,11 @@
 {
   "exp_name": "rtabmap_mppi_vlm_reachability",
+  "data_root": "/home/zli133/shared/data/habitat",
+  "dataset_name": "hssd-hab",
+  "scene_name": "102344094",
   "platform": "simulator",
+  "initial_pose": [0.5, 3.5, 1.5],
+  "dt": 0.01,
   "goal": [4, 0.0],
   "text_queries": ["stay away from the rug"],
   "score_threshold": 0.1,
