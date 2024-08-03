@@ -4,7 +4,7 @@ import json
 
 import rospy
 
-from geometry_msgs.msg import Twist, PoseWithCovarianceStamped, PoseStamped, Pose
+from geometry_msgs.msg import Twist, TwistStamped, PoseWithCovarianceStamped, PoseStamped, Pose
 from nav_msgs.msg import OccupancyGrid, Odometry
 from std_msgs.msg import Float32
 
@@ -28,6 +28,7 @@ class SafeControllerNode:
         self.semantic_grid_map = None
         self.last_updated = -1
         self.brt_computed = False
+        self.unsafe_level = 0.2
 
         self.robot_pose_sub = rospy.Subscriber(self.topics_names["pose"], PoseWithCovarianceStamped, callback=self.robot_pose_callback)
         self.nominal_action_sub = rospy.Subscriber(self.topics_names["nominal_action"], Twist, queue_size=1, callback=self.nominal_action_callback)
@@ -36,10 +37,12 @@ class SafeControllerNode:
 
         self.constraints_map_pub = rospy.Publisher(self.topics_names["constraints_grid_map"], OccupancyGrid, queue_size=10)
         self.safe_action_pub = rospy.Publisher(self.topics_names["safe_action"], Twist, queue_size=1)
+        self.safe_action_viz_pub = rospy.Publisher("cmd_vel_viz", TwistStamped, queue_size=1)
         self.value_function_pub = rospy.Publisher(self.topics_names["value_function_at_state"], PoseStamped, queue_size=10)
         self.failure_pub = rospy.Publisher(self.topics_names["failure_set_at_state"], PoseStamped, queue_size=10)
         self.safe_planning_time_pub = rospy.Publisher(self.topics_names["safe_planning_time"], Float32, queue_size=10)
         self.brt_computation_time_pub = rospy.Publisher(self.topics_names["brt_computation_time"], Float32, queue_size=10)
+        self.brt_viz_pub = rospy.Publisher('brt_viz', OccupancyGrid, queue_size=10)
 
     def make_exp_config(self):
         self.exp_path = self.args.exp_path
@@ -65,6 +68,8 @@ class SafeControllerNode:
             safe_action, value, initial_value = self.compute_safe_control(nominal_action)
             safe_action_msg = self._construct_twist_msg(safe_action)
             self.safe_action_pub.publish(safe_action_msg)
+            safe_action_viz_msg = self._construct_twist_stamped_msg(safe_action)
+            self.safe_action_viz_pub.publish(safe_action_viz_msg)
             value_function_msg = self._construct_pose_stamped_msg([self.robot_pose[0], self.robot_pose[1], value], [0.0, 0.0, self.robot_pose[2]])
             self.value_function_pub.publish(value_function_msg)
             failure_msg = self._construct_pose_stamped_msg([self.robot_pose[0], self.robot_pose[1], initial_value], [0.0, 0.0, self.robot_pose[2]])
@@ -104,7 +109,7 @@ class SafeControllerNode:
             rospy.loginfo("Computing warm-started BRT.")
 
         start_time = rospy.Time.now().secs
-        self.values = self.reachability_solver.solve(constraints_grid_map)
+        self.values = self.reachability_solver.solve(constraints_grid_map, epsilon=0.005)
         end_time = rospy.Time.now().secs
         time_taken = end_time - start_time
         self.brt_computation_time_pub.publish(Float32(data=time_taken))
@@ -149,6 +154,7 @@ class SafeControllerNode:
         converged_values = np.load("/home/leo/riss_ws/src/lang_reachability_ros/lab_value_function.npy")
         self.reachability_solver = reachability.ReachabilitySolver(system="unicycle3d", 
                                                                     domain=[[domain_low[0], domain_low[1]],[domain_high[0], domain_high[1]]],
+                                                                    unsafe_level=self.unsafe_level,
                                                                     converged_values=None,
                                                                     mode="brt", accuracy="low")
 
@@ -173,6 +179,17 @@ class SafeControllerNode:
         msg.angular.z = action[1]
         return msg
     
+    def _construct_twist_stamped_msg(self, action):
+        """
+        construct geometry_msgs/Twist assuming action = [v, w]
+        """
+        msg = TwistStamped()
+        msg.header.frame_id = "locobot/base_link"
+        msg.header.stamp = rospy.Time.now()
+        msg.twist.linear.x = action[0]
+        msg.twist.angular.z = action[1]
+        return msg
+    
     def _construct_pose_stamped_msg(self, pos, ori):
         """
         construct geometry_msgs/Pose assuming pos = [x, y, z], ori = [roll, pitch, yaw]
@@ -189,7 +206,24 @@ class SafeControllerNode:
         msg.pose.orientation.z = quat[2]
         msg.pose.orientation.w = quat[3]
         return msg
-
+    
+    def _publish_brt_viz(self):
+        if self.brt_computed:
+            msg = OccupancyGrid()
+            msg.header.frame_id = 'map'
+            msg.info.origin.position.x = self.map_origin[0]
+            msg.info.origin.position.y = self.map_origin[1]
+            msg.info.origin.orientation.w = 1
+            msg.info.height = np.shape(self.grid_map)[0]
+            msg.info.width = np.shape(self.grid_map)[1]
+            msg.info.resolution = self.map_resolution
+            ori_idx = int(self.robot_pose[2]/(2*np.pi)*np.shape(self.values)[2] - 1)
+            data = self.values[:, :, ori_idx]
+            data = data.flatten()
+            data[data > self.unsafe_level] = 0
+            data[data < self.unsafe_level] = 100
+            msg.data = tuple(data.astype(int))
+            self.brt_viz_pub.publish(msg)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Command Node")
@@ -204,16 +238,16 @@ if __name__ == '__main__':
     # floorplan = np.load("/home/leo/git/hj_reachability/top_down_map.npy")
     solver_node = SafeControllerNode(args)
 
+    rospy.sleep(15)
+    
     # enforce first BRT computation
     while not solver_node.brt_computed and not rospy.is_shutdown():
         solver_node.compute_brt()
-        rospy.sleep(2)
 
-
-    brt_update_interval = 5
+    brt_update_interval = 3
     rate = rospy.Rate(10)
     while not rospy.is_shutdown():
         if rospy.Time.now().secs - solver_node.last_updated >= brt_update_interval:
             solver_node.compute_brt()
-
+        solver_node._publish_brt_viz()
         rate.sleep()

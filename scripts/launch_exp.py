@@ -94,7 +94,11 @@ if __name__ == '__main__':
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
-    exp_name = "rtabmap_mppi_vlm_reachability"
+    parser = argparse.ArgumentParser(description="Command Node")
+    parser.add_argument('--exp', type=str, default=None, help='experiment description')
+    args = parser.parse_args()
+
+    exp_name = args.exp
     exp_configs_path = os.path.join(dir_path, 'config', 'hardware_exps', exp_name, f"{exp_name}.json")
     with open(exp_configs_path, 'r') as f:
         exp_configs = json.load(f)

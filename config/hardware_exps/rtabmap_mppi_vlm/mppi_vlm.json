@@ -1,8 +1,0 @@
-{
-  "exp_name": "mppi_vlm",
-  "platform": "hardware",
-  "text_queries": ["avoid the rug"],
-  "constraints_thresholds": [0.12, 0.5],
-  "goal": [4, -5.0],
-  "results_path": "/home/leo/riss_ws/src/lang_reachability_ros/experiments/hardware/scenario1"
-}

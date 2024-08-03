@@ -44,7 +44,7 @@ class ConstraintDetectorNode:
         self.semantic_grid_map = None
         self.grid_map = None
 
-        self.object_detector = perception.ObjectDetector(score_threshold=0.2, init_queries=self.exp_config['text_queries'])
+        self.object_detector = perception.ObjectDetector(score_threshold=self.exp_config['score_threshold'], init_queries=self.exp_config['text_queries'])
         self.bridge = cv_bridge.CvBridge()
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
@@ -60,7 +60,7 @@ class ConstraintDetectorNode:
         self.camera_info_sub = rospy.Subscriber(self.topics_names["camera_info"], CameraInfo, callback=self.camera_info_callback)
         self.robot_pose_sub = rospy.Subscriber(self.topics_names["pose"], PoseWithCovarianceStamped, callback=self.robot_pose_callback)
 
-        rospy.loginfo(f"Initialized VLM with the following language constraints: {self.object_detector.text_queries}")
+        rospy.loginfo(f"Initialized VLM with the following cofigs: [language constraints: {self.object_detector.text_queries}\nscore threshold: {self.object_detector.score_threshold}]")
 
     def make_exp_config(self):
         self.exp_path = self.args.exp_path
@@ -91,7 +91,7 @@ class ConstraintDetectorNode:
         self.rgb_img = self.bridge.imgmsg_to_cv2(msg, desired_encoding="rgb8")
 
     def depth_img_callback(self, msg: Image):
-        self.depth_img = self.bridge.imgmsg_to_cv2(msg, desired_encoding="passthrough")
+        self.depth_img = self.bridge.imgmsg_to_cv2(msg, desired_encoding="16UC1")/1000
 
     def camera_info_callback(self, msg: CameraInfo):
         if self.K is None or self.K_inv is None:
@@ -115,7 +115,7 @@ class ConstraintDetectorNode:
         T_inv = self.get_inv_camera_extrinsics_matrix()
         # print(f"T_inv={T_inv}")
         for bbox, label in detections:
-            x_occ, y_occ = self.object_detector.estimate_object_position(self.robot_pose, self.depth_img, bbox, K_inv, T_inv, threshold=10)
+            x_occ, y_occ = self.object_detector.estimate_object_position(self.depth_img, bbox, K_inv, T_inv, threshold=4)
             row, col = self.__position_to_cell(x_occ, y_occ)
             try:
                 self.semantic_grid_map[row, col] = 100
@@ -159,7 +159,7 @@ class ConstraintDetectorNode:
         self.constaints_grid_map_pub.publish(msg)
 
     def get_camera_extrinsics_matrix(self):
-        transform_camera_to_map = self.tf_buffer.lookup_transform('camera_link', 'map', rospy.Time(0), rospy.Duration(1.0))
+        transform_camera_to_map = self.tf_buffer.lookup_transform('camera_depth_optical_frame', 'map', rospy.Time(0), rospy.Duration(1.0))
         t = transform_camera_to_map.transform.translation
         q = transform_camera_to_map.transform.rotation
 
@@ -171,7 +171,7 @@ class ConstraintDetectorNode:
         return matrix
     
     def get_inv_camera_extrinsics_matrix(self):
-        transform_camera_to_map = self.tf_buffer.lookup_transform('map', 'camera_link', rospy.Time(0), rospy.Duration(1.0))
+        transform_camera_to_map = self.tf_buffer.lookup_transform('map', 'camera_depth_optical_frame', rospy.Time(0), rospy.Duration(1.0))
         t = transform_camera_to_map.transform.translation
         q = transform_camera_to_map.transform.rotation
 

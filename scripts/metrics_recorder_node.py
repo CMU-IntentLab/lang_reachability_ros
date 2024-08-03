@@ -7,7 +7,10 @@ import rospy
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
 from std_msgs.msg import Float32, String
 from nav_msgs.msg import OccupancyGrid
+from sensor_msgs.msg import Image
 
+import cv2
+import cv_bridge
 import tf.transformations as tft
 
 import numpy as np
@@ -21,6 +24,7 @@ class MetricsRecorderNode:
         self.args = args
         self.exp_config = self.make_exp_config()
         self.topics_names = self.make_topics_names()
+        self.bridge = cv_bridge.CvBridge()
 
         self.save_path = self.exp_config["results_path"]
         self.start_time = rospy.Time.now().secs
@@ -38,6 +42,8 @@ class MetricsRecorderNode:
         self.semantic_map_times = []
         self.combined_times = []
         self.text_queries = []
+        self.rgb_images = None
+        self.rgb_detections = None
 
         self.robot_state_sub = rospy.Subscriber(self.topics_names["pose"], PoseWithCovarianceStamped, callback=self.robot_state_callback)
         self.value_function_sub = rospy.Subscriber(self.topics_names["value_function_at_state"], PoseStamped, callback=self.value_function_callback)
@@ -49,6 +55,8 @@ class MetricsRecorderNode:
         self.grid_map_sub = rospy.Subscriber(self.topics_names["grid_map"], OccupancyGrid, self.grid_map_callback)
         self.semantic_map_sub = rospy.Subscriber(self.topics_names["semantic_grid_map"], OccupancyGrid, self.semantic_map_callback)
         self.language_queries_sub = rospy.Subscriber(self.topics_names["language_constraint"], String, callback=self.text_queries_callback)
+        self.rgb_image_sub = rospy.Subscriber(self.topics_names["rgb_image"], Image, callback=self.rgb_image_callback)
+        self.rgb_detections_sub = rospy.Subscriber(self.topics_names["vlm_detections"], Image, callback=self.rgb_detection_callback)
 
     def make_exp_config(self):
         self.exp_path = self.args.exp_path
@@ -118,6 +126,20 @@ class MetricsRecorderNode:
         query = msg.data
         self.text_queries.append(query)
 
+    def rgb_image_callback(self, msg: Image):
+        img_array = np.array(self.bridge.imgmsg_to_cv2(msg, desired_encoding="rgb8"))
+        if self.rgb_images is None:
+            self.rgb_images = img_array
+        else:
+            self.rgb_images = np.dstack((self.rgb_images, img_array))
+
+    def rgb_detection_callback(self, msg: Image):
+        img_array = np.array(self.bridge.imgmsg_to_cv2(msg, desired_encoding="rgb8"))
+        if self.rgb_images is None:
+            self.rgb_detections = img_array
+        else:
+            self.rgb_detections = np.dstack((self.rgb_images, img_array))
+
     def save_all_metrics(self):
         now = datetime.datetime.now()
         now = now.strftime("%Y-%m-%d-%H:%M:%S")
@@ -138,6 +160,19 @@ class MetricsRecorderNode:
         with open(os.path.join(self.save_path, now, "text_queries.txt"), "w") as file:
             for query in self.text_queries:
                 file.write(query + "\n")
+
+        size = np.shape(self.rgb_images)
+        print(f"video size = {size}")
+        out = cv2.VideoWriter(os.path.join(self.save_path, now, 'rgb_images.avi'), 0, 30, (size[1], size[0]), False)
+        for frame in self.rgb_images:
+            out.write(frame)
+        # out.release()
+
+        size = np.shape(self.rgb_detections)
+        out = cv2.VideoWriter(os.path.join(self.save_path, now, 'rgb_detections.avi'), 0, 30, (size[1], size[0]), False)
+        for frame in self.rgb_detections:
+            out.write(frame)
+        # out.release()
 
     def get_time_since_start(self):
         return rospy.Time.now().secs - self.start_time
