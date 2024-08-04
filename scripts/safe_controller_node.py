@@ -104,10 +104,10 @@ class SafeControllerNode:
         else:
             rospy.loginfo("Computing warm-started BRT.")
 
-        start_time = rospy.Time.now().secs
+        start_time = rospy.Time.now()
         self.values = self.reachability_solver.solve(constraints_grid_map)
-        end_time = rospy.Time.now().secs
-        time_taken = end_time - start_time
+        end_time = rospy.Time.now()
+        time_taken = (end_time - start_time).to_sec()
         self.brt_computation_time_pub.publish(Float32(data=time_taken))
 
         self.brt_computed = True
@@ -119,9 +119,9 @@ class SafeControllerNode:
             rospy.logwarn("Robot pose was not received. Cannot compute safe action.")
             return nominal_action
         
-        start_time = rospy.Time.now().secs
+        start_time = rospy.Time.now()
         safe_action, value, initial_values = self.reachability_solver.compute_safe_control(self.robot_pose, nominal_action)
-        time_taken = rospy.Time.now().secs - start_time
+        time_taken = (rospy.Time.now() - start_time).to_sec()
         self.safe_planning_time_pub.publish(Float32(data=time_taken))
         return safe_action, value, initial_values
     
