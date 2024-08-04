@@ -63,7 +63,7 @@ class MetricsRecorderNode:
         return topics_names
     
     def robot_state_callback(self, msg: PoseWithCovarianceStamped):
-        time = msg.header.stamp.secs
+        time = self.get_time_since_start()
         pos = msg.pose.pose.position
         quat = msg.pose.pose.orientation
         euler = tft.euler_from_quaternion([quat.x, quat.y, quat.z, quat.w])
@@ -71,12 +71,12 @@ class MetricsRecorderNode:
         self.trajectory.append(pose)
 
     def value_function_callback(self, msg: PoseStamped):
-        time = msg.header.stamp.secs
+        time = self.get_time_since_start()
         value = [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z, time]
         self.value_function_at_state.append(value)
     
     def failure_callback(self, msg: PoseStamped):
-        time = msg.header.stamp.secs
+        time = self.get_time_since_start()
         value = [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z, time]
         self.failure_at_state.append(value)
 
