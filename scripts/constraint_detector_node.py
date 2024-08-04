@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
 
-import sys
-# sys.path.append("/home/riss_ws/src/lang_reachability_ros/scripts/lang-reachability")
-
 from lang_reachability import perception
 
 import rospy

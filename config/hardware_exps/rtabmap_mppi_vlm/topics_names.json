@@ -12,7 +12,7 @@
     "vlm_detections": "/vlm_detections",
 
     "goal": "/goal",
-    "nominal_action": "/locobot/mobile_base/commands/velocity",
+    "nominal_action": "cmd_vel",
     "safe_action": "/locobot/mobile_base/commands/velocity",
     "trajectory_visualization": "/vis_trajectories",
 

@@ -27,8 +27,12 @@ class MetricsRecorderNode:
         self.bridge = cv_bridge.CvBridge()
 
         self.save_path = self.exp_config["results_path"]
-        self.start_time = rospy.Time.now().secs
+        now = datetime.datetime.now()
+        now = now.strftime("%Y-%m-%d-%H:%M:%S")
+        self.save_path = os.path.join(self.save_path, now)
+        os.makedirs(self.save_path)
 
+        self.start_time = rospy.Time.now().secs
         self.trajectory = []
         self.value_function_at_state = []
         self.failure_at_state = []
@@ -42,8 +46,8 @@ class MetricsRecorderNode:
         self.semantic_map_times = []
         self.combined_times = []
         self.text_queries = []
-        self.rgb_images = None
-        self.rgb_detections = None
+        self.rgb_images_writer = None
+        self.rgb_detections_writer = None
 
         self.robot_state_sub = rospy.Subscriber(self.topics_names["pose"], PoseWithCovarianceStamped, callback=self.robot_state_callback)
         self.value_function_sub = rospy.Subscriber(self.topics_names["value_function_at_state"], PoseStamped, callback=self.value_function_callback)
@@ -127,52 +131,42 @@ class MetricsRecorderNode:
         self.text_queries.append(query)
 
     def rgb_image_callback(self, msg: Image):
-        img_array = np.array(self.bridge.imgmsg_to_cv2(msg, desired_encoding="rgb8"))
-        if self.rgb_images is None:
-            self.rgb_images = img_array
+        img_array = np.array(self.bridge.imgmsg_to_cv2(msg, desired_encoding="rgb8"), dtype="uint8")
+        vidframe = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+        if self.rgb_images_writer is None:
+            size = np.shape(img_array)
+            self.rgb_images_writer = cv2.VideoWriter(os.path.join(self.save_path, 'rgb_images.avi'), 0, 8, (size[1], size[0]))
+            self.rgb_images_writer.write(vidframe)
         else:
-            self.rgb_images = np.dstack((self.rgb_images, img_array))
+            self.rgb_images_writer.write(vidframe)
 
     def rgb_detection_callback(self, msg: Image):
-        img_array = np.array(self.bridge.imgmsg_to_cv2(msg, desired_encoding="rgb8"))
-        if self.rgb_images is None:
-            self.rgb_detections = img_array
+        img_array = np.array(self.bridge.imgmsg_to_cv2(msg, desired_encoding="rgb8"), dtype="uint8")
+        vidframe = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+        if self.rgb_detections_writer is None:
+            size = np.shape(img_array)
+            self.rgb_detections_writer = cv2.VideoWriter(os.path.join(self.save_path, 'rgb_detections.avi'), 0, 8, (size[1], size[0]))
+            self.rgb_detections_writer.write(vidframe)
         else:
-            self.rgb_detections = np.dstack((self.rgb_images, img_array))
+            self.rgb_detections_writer.write(vidframe)
 
     def save_all_metrics(self):
-        now = datetime.datetime.now()
-        now = now.strftime("%Y-%m-%d-%H:%M:%S")
-        os.makedirs(os.path.join(self.save_path, now))
-        np.save(os.path.join(self.save_path, now, "trajectory.npy"), self.trajectory)
-        np.save(os.path.join(self.save_path, now, "value_function_at_state.npy"), self.value_function_at_state)
-        np.save(os.path.join(self.save_path, now, "failure_at_state.npy"), self.failure_at_state)
-        np.save(os.path.join(self.save_path, now, "nominal_planning_time.npy"), self.nominal_planning_time)
-        np.save(os.path.join(self.save_path, now, "safe_planning_time.npy"), self.safe_planning_time)
-        np.save(os.path.join(self.save_path, now, "brt_computation_time.npy"), self.brt_computation_time)
-        np.save(os.path.join(self.save_path, now, "map_size_meters.npy"), self.map_size_meters)
-        np.save(os.path.join(self.save_path, now, "floorplan.npy"), self.floorplan)
-        np.save(os.path.join(self.save_path, now, "combined_map_over_time.npy"), self.combined_map_over_time)
-        np.save(os.path.join(self.save_path, now, "semantic_map_over_time.npy"), self.semantic_map_over_time)
-        np.save(os.path.join(self.save_path, now, "semantic_map_times.npy"), self.semantic_map_times)
-        np.save(os.path.join(self.save_path, now, "combined_times.npy"), self.combined_times)
+        np.save(os.path.join(self.save_path, "trajectory.npy"), self.trajectory)
+        np.save(os.path.join(self.save_path, "value_function_at_state.npy"), self.value_function_at_state)
+        np.save(os.path.join(self.save_path, "failure_at_state.npy"), self.failure_at_state)
+        np.save(os.path.join(self.save_path, "nominal_planning_time.npy"), self.nominal_planning_time)
+        np.save(os.path.join(self.save_path, "safe_planning_time.npy"), self.safe_planning_time)
+        np.save(os.path.join(self.save_path, "brt_computation_time.npy"), self.brt_computation_time)
+        np.save(os.path.join(self.save_path, "map_size_meters.npy"), self.map_size_meters)
+        np.save(os.path.join(self.save_path, "floorplan.npy"), self.floorplan)
+        np.save(os.path.join(self.save_path, "combined_map_over_time.npy"), self.combined_map_over_time)
+        np.save(os.path.join(self.save_path, "semantic_map_over_time.npy"), self.semantic_map_over_time)
+        np.save(os.path.join(self.save_path, "semantic_map_times.npy"), self.semantic_map_times)
+        np.save(os.path.join(self.save_path, "combined_times.npy"), self.combined_times)
 
-        with open(os.path.join(self.save_path, now, "text_queries.txt"), "w") as file:
+        with open(os.path.join(self.save_path, "text_queries.txt"), "w") as file:
             for query in self.text_queries:
                 file.write(query + "\n")
-
-        size = np.shape(self.rgb_images)
-        print(f"video size = {size}")
-        out = cv2.VideoWriter(os.path.join(self.save_path, now, 'rgb_images.avi'), 0, 30, (size[1], size[0]), False)
-        for frame in self.rgb_images:
-            out.write(frame)
-        # out.release()
-
-        size = np.shape(self.rgb_detections)
-        out = cv2.VideoWriter(os.path.join(self.save_path, now, 'rgb_detections.avi'), 0, 30, (size[1], size[0]), False)
-        for frame in self.rgb_detections:
-            out.write(frame)
-        # out.release()
 
     def get_time_since_start(self):
         return rospy.Time.now().secs - self.start_time

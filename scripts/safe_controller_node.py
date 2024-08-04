@@ -8,6 +8,8 @@ from geometry_msgs.msg import Twist, TwistStamped, PoseWithCovarianceStamped, Po
 from nav_msgs.msg import OccupancyGrid, Odometry
 from std_msgs.msg import Float32
 
+import tf2_ros
+import tf2_geometry_msgs.tf2_geometry_msgs
 import tf.transformations as tft 
 
 import numpy as np
@@ -28,9 +30,13 @@ class SafeControllerNode:
         self.semantic_grid_map = None
         self.last_updated = -1
         self.brt_computed = False
-        self.unsafe_level = 0.2
+        self.unsafe_level = 0.35
+
+        self.tf_buffer = tf2_ros.Buffer()
+        self.listener = tf2_ros.TransformListener(self.tf_buffer)
 
         self.robot_pose_sub = rospy.Subscriber(self.topics_names["pose"], PoseWithCovarianceStamped, callback=self.robot_pose_callback)
+        self.robot_odom_sub = rospy.Subscriber(self.topics_names["odom"], Odometry, callback=self.odom_callback)
         self.nominal_action_sub = rospy.Subscriber(self.topics_names["nominal_action"], Twist, queue_size=1, callback=self.nominal_action_callback)
         self.floorplan_sub = rospy.Subscriber(self.topics_names["grid_map"], OccupancyGrid, callback=self.floorplan_callback)
         self.semantic_map_sub = rospy.Subscriber(self.topics_names["semantic_grid_map"], OccupancyGrid, callback=self.semantic_map_callback)
@@ -57,10 +63,35 @@ class SafeControllerNode:
         return topics_names
     
     def robot_pose_callback(self, msg: PoseWithCovarianceStamped):
+        return
         pos = msg.pose.pose.position
         quat = msg.pose.pose.orientation
         euler = tft.euler_from_quaternion([quat.x, quat.y, quat.z, quat.w])
         self.robot_pose = np.array([pos.x, pos.y, euler[2]])
+
+    def odom_callback(self, msg: Odometry):
+        do_transform = False
+        if do_transform:
+            transform = self.tf_buffer.lookup_transform('map', 'locobot/odom', rospy.Time(0))
+            pose_stamped = PoseStamped()
+            pose_stamped.header = msg.header
+            pose_stamped.pose = msg.pose.pose
+            pose_map = tf2_geometry_msgs.do_transform_pose(pose_stamped, transform)
+            pos = pose_map.pose.position
+            quat = pose_map.pose.orientation
+            euler = tft.euler_from_quaternion([quat.x, quat.y, quat.z, quat.w])
+            self.robot_pose = np.array([pos.x, pos.y, euler[2]])
+        else:
+            pos = msg.pose.pose.position
+            quat = msg.pose.pose.orientation
+            euler = tft.euler_from_quaternion([quat.x, quat.y, quat.z, quat.w])
+            self.robot_pose = np.array([pos.x, pos.y, euler[2]])
+        # if self.robot_init_pose is not None:
+            # pos = msg.pose.pose.position
+            # quat = msg.pose.pose.orientation
+            # euler = tft.euler_from_quaternion([quat.x, quat.y, quat.z, quat.w])
+            # odom = np.array([pos.x, pos.y, euler[2]])
+            # self.robot_pose = self.robot_init_pose + odom
 
     def nominal_action_callback(self, msg: Twist):
         if self.brt_computed:
@@ -217,11 +248,15 @@ class SafeControllerNode:
             msg.info.height = np.shape(self.grid_map)[0]
             msg.info.width = np.shape(self.grid_map)[1]
             msg.info.resolution = self.map_resolution
-            ori_idx = int(self.robot_pose[2]/(2*np.pi)*np.shape(self.values)[2] - 1)
+            ori = self.robot_pose[2]
+            if ori < 0:
+                ori += 2*np.pi
+            ori_idx = int(ori/(2*np.pi)*np.shape(self.values)[2])
             data = self.values[:, :, ori_idx]
             data = data.flatten()
-            data[data > self.unsafe_level] = 0
-            data[data < self.unsafe_level] = 100
+            data[data < self.unsafe_level] = 0
+            data[data > self.unsafe_level] = 100
+            data = 100 - data
             msg.data = tuple(data.astype(int))
             self.brt_viz_pub.publish(msg)
 
@@ -244,7 +279,7 @@ if __name__ == '__main__':
     while not solver_node.brt_computed and not rospy.is_shutdown():
         solver_node.compute_brt()
 
-    brt_update_interval = 3
+    brt_update_interval = 3000
     rate = rospy.Rate(10)
     while not rospy.is_shutdown():
         if rospy.Time.now().secs - solver_node.last_updated >= brt_update_interval:

@@ -1,10 +1,7 @@
 import rospy
 import torch
 import numpy as np
-import os
-import logging
-from pathlib import Path
-from nav_msgs.msg import Odometry, OccupancyGrid
+from nav_msgs.msg import Odometry, OccupancyGrid, Path
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, Pose, Twist
 from std_msgs.msg import Float32
 from visualization_msgs.msg import Marker, MarkerArray
@@ -23,6 +20,9 @@ class NavigationNode:
         self.args = args
         self.topics_names = self.make_topics_names()
 
+        self.path_msg = Path()
+
+        self.path_publisher = rospy.Publisher('/robot_path', Path, queue_size=1)
         self.twist_pub = rospy.Publisher(self.topics_names["nominal_action"], Twist, queue_size=1)
         self.marker_pub = rospy.Publisher(self.topics_names["trajectory_visualization"], MarkerArray, queue_size=1)
         self.planning_time_pub = rospy.Publisher(self.topics_names["nominal_planning_time"], Float32, queue_size=10)
@@ -148,6 +148,13 @@ class NavigationNode:
             marker_array.markers.append(marker)
         self.marker_pub.publish(marker_array)
 
+    def publish_path(self):
+        self.path_msg.header.frame_id = 'map'
+        self.path_msg.header.stamp = rospy.Time.now()
+        pose_msg = PoseStamped()
+        pose_msg.pose = self._odom.pose.pose
+        self.path_msg.poses.append(pose_msg)
+        self.path_publisher.publish(self.path_msg)
 
 if __name__ == '__main__':
     rospy.init_node('navigation_node')
@@ -172,4 +179,5 @@ if __name__ == '__main__':
             navigator_node.publish_command()
             if visualization:
                 navigator_node.publish_trajectories()
+                navigator_node.publish_path()
         rate.sleep()
