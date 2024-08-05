@@ -149,7 +149,6 @@ class SceneReconstruction():
 
         distances = np.sqrt(x_diff_squared + y_diff_squared)
         total_cost = np.sum(distances)
-        print(total_cost)
         return total_cost
 
     def compute_total_exe_time(self):
