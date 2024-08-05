@@ -38,10 +38,12 @@ class MetricsRecorderNode:
         self.semantic_map_times = []
         self.combined_times = []
         self.text_queries = []
+        self.vlm_inference_times = []
 
         self.robot_state_sub = rospy.Subscriber(self.topics_names["pose"], PoseWithCovarianceStamped, callback=self.robot_state_callback)
         self.value_function_sub = rospy.Subscriber(self.topics_names["value_function_at_state"], PoseStamped, callback=self.value_function_callback)
         self.failure_sub = rospy.Subscriber(self.topics_names["failure_set_at_state"], PoseStamped, callback=self.failure_callback)
+        self.vlm_inference_time_sub = rospy.Subscriber(self.topics_names["vlm_inference_time"], Float32, callback=self.vlm_inference_time_callback)
         # self.planning_latency_sub = rospy.Subscriber()
         self.nominal_planning_time_sub = rospy.Subscriber(self.topics_names["nominal_planning_time"], Float32, self.nominal_planning_time_callback)
         self.safe_planning_time_sub = rospy.Subscriber(self.topics_names["safe_planning_time"], Float32, callback=self.safe_planning_time_callback)
@@ -61,7 +63,11 @@ class MetricsRecorderNode:
         with open(self.topics_path, 'r') as f:
             topics_names = json.load(f)
         return topics_names
-    
+
+    def vlm_inference_time_callback(self, msg: Float32):
+        self.vlm_inference_times.append([msg.data, self.get_time_since_start()])
+
+
     def robot_state_callback(self, msg: PoseWithCovarianceStamped):
         time = self.get_time_since_start()
         pos = msg.pose.pose.position
@@ -134,6 +140,7 @@ class MetricsRecorderNode:
         np.save(os.path.join(self.save_path, now, "semantic_map_over_time.npy"), self.semantic_map_over_time)
         np.save(os.path.join(self.save_path, now, "semantic_map_times.npy"), self.semantic_map_times)
         np.save(os.path.join(self.save_path, now, "combined_times.npy"), self.combined_times)
+        np.save(os.path.join(self.save_path, now, "vlm_inference_times.npy"), self.vlm_inference_times)
 
         with open(os.path.join(self.save_path, now, "text_queries.txt"), "w") as file:
             for query in self.text_queries:

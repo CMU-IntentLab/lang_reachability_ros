@@ -12,7 +12,7 @@ import json
 import tf.transformations
 import argparse
 
-from std_msgs.msg import String
+from std_msgs.msg import String, Float32
 from nav_msgs.msg import OccupancyGrid
 from sensor_msgs.msg import Image, CameraInfo
 from geometry_msgs.msg import PoseWithCovarianceStamped
@@ -52,6 +52,7 @@ class ConstraintDetectorNode:
         self.vlm_detections_pub = rospy.Publisher(self.topics_names["vlm_detections"], Image, queue_size=10)
         self.constaints_grid_map_pub = rospy.Publisher(self.topics_names["constraints_grid_map"], OccupancyGrid, queue_size=10)
         self.semantic_grid_map_pub = rospy.Publisher(self.topics_names["semantic_grid_map"], OccupancyGrid, queue_size=10)
+        self.inference_time_pub = rospy.Publisher(self.topics_names["vlm_inference_time"], Float32, queue_size=10)
 
         self.text_query_sub = rospy.Subscriber(self.topics_names["language_constraint"], String, callback=self.text_query_callback)
         self.grid_map_sub = rospy.Subscriber(self.topics_names["grid_map"], OccupancyGrid, callback=self.grid_map_callback)
@@ -110,7 +111,11 @@ class ConstraintDetectorNode:
             return
         
         rgb_img = np.copy(self.rgb_img)
+        start_time = rospy.Time.now()
         detections = self.object_detector.detect(rgb_img)
+        inference_time = (rospy.Time.now() - start_time).to_sec()
+        self.inference_time_pub.publish(Float32(data=inference_time))
+
         K_inv = self.get_inv_camera_intrinsics_matrix()
         T_inv = self.get_inv_camera_extrinsics_matrix()
         # print(f"T_inv={T_inv}")

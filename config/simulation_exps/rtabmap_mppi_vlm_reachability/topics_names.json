@@ -10,6 +10,7 @@
 
     "language_constraint": "/language_constraint",
     "vlm_detections": "/vlm_detections",
+    "vlm_inference_time": "/vlm_inference_time",
 
     "goal": "/goal",
     "nominal_action": "/nominal_cmd_vel",
