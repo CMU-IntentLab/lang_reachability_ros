@@ -12,7 +12,8 @@ import tf.transformations as tft
 
 import numpy as np
 import datetime
-
+import signal
+import sys
 import argparse
 import json
 
@@ -36,7 +37,7 @@ class MetricsRecorderNode:
         self.combined_map_over_time = None
         self.semantic_map_over_time = None
         self.semantic_map_times = []
-        self.combined_times = []
+        self.combined_map_times = []
         self.text_queries = []
         self.vlm_inference_times = []
 
@@ -44,13 +45,15 @@ class MetricsRecorderNode:
         self.value_function_sub = rospy.Subscriber(self.topics_names["value_function_at_state"], PoseStamped, callback=self.value_function_callback)
         self.failure_sub = rospy.Subscriber(self.topics_names["failure_set_at_state"], PoseStamped, callback=self.failure_callback)
         self.vlm_inference_time_sub = rospy.Subscriber(self.topics_names["vlm_inference_time"], Float32, callback=self.vlm_inference_time_callback)
-        # self.planning_latency_sub = rospy.Subscriber()
+
+        self.constraint_map_sub = rospy.Subscriber(self.topics_names['constraints_grid_map'], OccupancyGrid, callback=self.constraints_map_callback)
         self.nominal_planning_time_sub = rospy.Subscriber(self.topics_names["nominal_planning_time"], Float32, self.nominal_planning_time_callback)
         self.safe_planning_time_sub = rospy.Subscriber(self.topics_names["safe_planning_time"], Float32, callback=self.safe_planning_time_callback)
         self.brt_computation_time_sub = rospy.Subscriber(self.topics_names["brt_computation_time"], Float32, callback=self.brt_computation_time_callback)
         self.grid_map_sub = rospy.Subscriber(self.topics_names["grid_map"], OccupancyGrid, self.grid_map_callback)
         self.semantic_map_sub = rospy.Subscriber(self.topics_names["semantic_grid_map"], OccupancyGrid, self.semantic_map_callback)
         self.language_queries_sub = rospy.Subscriber(self.topics_names["language_constraint"], String, callback=self.text_queries_callback)
+
 
     def make_exp_config(self):
         self.exp_path = self.args.exp_path
@@ -101,7 +104,8 @@ class MetricsRecorderNode:
             self.combined_map_over_time = combined_map_now
         else:
             self.combined_map_over_time = np.dstack((self.combined_map_over_time, combined_map_now))
-        self.combined_map_times.append(self.get_time_since_start())
+        self.combined_map_times.append((self.get_time_since_start(), msg.info.resolution,
+                                        (msg.info.origin.position.x, msg.info.origin.position.y)))
 
     def semantic_map_callback(self, msg: OccupancyGrid):
         semantic_map_now = np.reshape(msg.data, (msg.info.height, msg.info.width))
@@ -109,7 +113,8 @@ class MetricsRecorderNode:
             self.semantic_map_over_time = semantic_map_now
         else:
             self.semantic_map_over_time = np.dstack((self.semantic_map_over_time, semantic_map_now))
-        self.semantic_map_times.append(self.get_time_since_start())
+        self.semantic_map_times.append((self.get_time_since_start(), msg.info.resolution,
+                                        (msg.info.origin.position.x, msg.info.origin.position.y)))
 
     def nominal_planning_time_callback(self, msg: Float32):
         self.nominal_planning_time.append([msg.data, self.get_time_since_start()])
@@ -125,6 +130,7 @@ class MetricsRecorderNode:
         self.text_queries.append(query)
 
     def save_all_metrics(self):
+        print("saving all metrics")
         now = datetime.datetime.now()
         now = now.strftime("%Y-%m-%d-%H:%M:%S")
         os.makedirs(os.path.join(self.save_path, now))
@@ -138,8 +144,9 @@ class MetricsRecorderNode:
         np.save(os.path.join(self.save_path, now, "floorplan.npy"), self.floorplan)
         np.save(os.path.join(self.save_path, now, "combined_map_over_time.npy"), self.combined_map_over_time)
         np.save(os.path.join(self.save_path, now, "semantic_map_over_time.npy"), self.semantic_map_over_time)
-        np.save(os.path.join(self.save_path, now, "semantic_map_times.npy"), self.semantic_map_times)
-        np.save(os.path.join(self.save_path, now, "combined_times.npy"), self.combined_times)
+        dtype = [('time', 'i4'), ('resolution', 'f8'), ('origin', '2f8')]
+        np.save(os.path.join(self.save_path, now, "semantic_map_times.npy"), np.array(self.semantic_map_times, dtype=dtype))
+        np.save(os.path.join(self.save_path, now, "combined_map_times.npy"), np.array(self.combined_map_times, dtype=dtype))
         np.save(os.path.join(self.save_path, now, "vlm_inference_times.npy"), self.vlm_inference_times)
 
         with open(os.path.join(self.save_path, now, "text_queries.txt"), "w") as file:
@@ -152,6 +159,7 @@ class MetricsRecorderNode:
         return rospy.Time.now().secs - self.start_time
 
 
+
 parser = argparse.ArgumentParser(description="Command Node")
 parser.add_argument('--exp_path', type=str, default=None, help='path to experiment json file')
 parser.add_argument('--topics_path', type=str, default=None, help='path to ROS topics names json file')
@@ -162,7 +170,14 @@ assert args.topics_path is not None, "topics names json file must be provided"
 
 rospy.init_node("metrics_recorder_node")
 node = MetricsRecorderNode(args)
-print("Started recording data!")
+print("Started recording data")
+
+def signal_handler(signal, frame):
+    print("Terminating and saving metrics...")
+    node.save_all_metrics()
+    sys.exit(0)
+
+signal.signal(signal.SIGTERM, signal_handler)
 
 last_print = rospy.Time.now().secs
 rate = rospy.Rate(10)
@@ -172,5 +187,3 @@ while not rospy.is_shutdown():
     if rospy.Time.now().secs - last_print > 5:
        last_print = rospy.Time.now().secs 
        print("I'm still alive and recording data!")
-       
-node.save_all_metrics()

@@ -50,7 +50,7 @@ class ConstraintDetectorNode:
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
 
         self.vlm_detections_pub = rospy.Publisher(self.topics_names["vlm_detections"], Image, queue_size=10)
-        self.constaints_grid_map_pub = rospy.Publisher(self.topics_names["constraints_grid_map"], OccupancyGrid, queue_size=10)
+        # self.constaints_grid_map_pub = rospy.Publisher(self.topics_names["constraints_grid_map"], OccupancyGrid, queue_size=10)
         self.semantic_grid_map_pub = rospy.Publisher(self.topics_names["semantic_grid_map"], OccupancyGrid, queue_size=10)
         self.inference_time_pub = rospy.Publisher(self.topics_names["vlm_inference_time"], Float32, queue_size=10)
 
