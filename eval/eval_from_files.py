@@ -41,36 +41,44 @@ class SceneReconstruction():
         self.path_points = Marker()
         self.initiate_path_points()
 
+        self.robot_start_time = self.get_robot_start_time()
+        print(f'robot_start_time: {self.robot_start_time}')
+
         # get data ready
-        self.trajectory_data_raw = None
-        self.value_function_data_raw = None
-        self.brt_computation_time_raw = None
-        self.nominal_planning_time_raw = None
-        self.safe_planning_time_raw = None
-        self.trajectory_dict, self.total_time_steps = self.load_trajectory_data()
-        self.value_function_dict= self.load_value_function_data()
-        self.brt_computation_time_dict = self.load_brt_computation_time()
-        self.nominal_planning_time_dict = self.load_nominal_planning_time()
-        self.safe_planning_time_dict = self.load_safe_planning_time()
+        self.brt_computation_time_dict, self.brt_computation_time_raw = self.load_brt_computation_time()
+        self.nominal_planning_time_dict, self.nominal_planning_time_raw = self.load_nominal_planning_time()
+        self.trajectory_dict, self.trajectory_data_raw, self.total_time_steps = self.load_trajectory_data()
+        self.value_function_dict, self.value_function_data_raw = self.load_value_function_data()
+        self.brt_computation_time_dict, self.brt_computation_time_raw = self.load_brt_computation_time()
+        self.safe_planning_time_dict, self.safe_planning_time_raw = self.load_safe_planning_time()
         self.semantic_maps_dict = self.load_map_data("semantic_map")
         self.combined_maps_dict = self.load_map_data("combined_map")
+        self.vlm_inference_time_dict, self.vlm_inference_time_raw = self.load_vlm_inference_time_data()
 
         # compute metrics
+        self.total_action_taken = len(self.nominal_planning_time_raw)
+
         self.total_exe_time = self.compute_total_exe_time()
         self.trajectory_cost = self.compute_trajectory_cost()
         self.safety_override_rate = self.compute_safety_override_rate()
         self.average_nominal_planning_time = self.compute_average_nominal_planning_time()
         self.average_safe_planning_time = self.compute_average_safe_planning_time()
         self.average_brt_computation_time = self.compute_average_brt_computation_time()
+        self.average_vlm_inference_time = self.compute_average_vlm_inference_time()
+        self.average_time_per_action = self.compute_time_for_action()
 
+
+
+        # self.sim = sim.Simulator(dataset_name=self.dataset_name, test_scene=self.scene_path, test_scene_name=self.scene_name,
+        #                          initial_state=[self.init_x, self.init_y, self.init_theta], dt=self.exp_config['dt'])
+
+    def get_robot_start_time(self):
         if self.safe_controller:
-            self.robot_start_time = self.brt_computation_time_raw[0, 1]
+            brt_computation_time = np.load(os.path.join(self.result_root, "brt_computation_time.npy"))
+            return int(brt_computation_time[0, 1])
         else:
-            self.robot_start_time = 0
-
-
-        self.sim = sim.Simulator(dataset_name=self.dataset_name, test_scene=self.scene_path, test_scene_name=self.scene_name,
-                                 initial_state=[self.init_x, self.init_y, self.init_theta], dt=self.exp_config['dt'])
+            nominal_planning_time = np.load(os.path.join(self.result_root, "nominal_planning_time.npy"))
+            return int(nominal_planning_time[0, 1])
 
     def initiate_time_line(self):
         pass
@@ -130,36 +138,76 @@ class SceneReconstruction():
         else:
             return map_dict[recent_record_time]
 
+    # def get_total_action_taken(self):
+    #     stopped_steps = -1
+    #     for i, time in enumerate(self.nominal_planning_time_raw[:, 1]):
+    #         if time == self.robot_start_time:
+    #             stopped_steps = i
+    #             break
+    #     return len(self.nominal_planning_time_raw) - stopped_steps
+
+    def get_robot_start_index(self, data: np.array):
+        for i, time in enumerate(data[:, -1]):
+            if int(time) >= self.robot_start_time:
+                return i
+
+        print("robot not started when this data is recorded")
+        return None
+
 
     def load_nominal_planning_time(self):
-        self.nominal_planning_time_raw = np.load(os.path.join(self.result_root, "nominal_planning_time.npy"))
-        nominal_planning_time_dict = {int(row[-1]): row[0] for row in self.nominal_planning_time_raw}
-        return nominal_planning_time_dict
+        nominal_planning_time_raw = np.load(os.path.join(self.result_root, "nominal_planning_time.npy"))
+        if self.safe_controller:
+            # cut the data that is recorded before the robot started
+            start_index = self.get_robot_start_index(nominal_planning_time_raw)
+            print(f'nominal plan start index: {start_index}')
+            nominal_planning_time_raw = nominal_planning_time_raw[start_index:]
+        nominal_planning_time_dict = {int(row[-1]): row[0] for row in nominal_planning_time_raw}
+        return nominal_planning_time_dict, nominal_planning_time_raw
 
     def load_safe_planning_time(self):
-        self.safe_planning_time_raw = np.load(os.path.join(self.result_root, "safe_planning_time.npy"))
-        safe_planning_time_dict = {int(row[-1]): row[0] for row in self.safe_planning_time_raw}
-        return safe_planning_time_dict
+        safe_planning_time_raw = np.load(os.path.join(self.result_root, "safe_planning_time.npy"))
+        if self.safe_controller:
+            # cut the data that is recorded before the robot started
+            start_index = self.get_robot_start_index(safe_planning_time_raw)
+            print(f'safe plan start index: {start_index}')
+            safe_planning_time_raw = safe_planning_time_raw[start_index:]
+        safe_planning_time_dict = {int(row[-1]): row[0] for row in safe_planning_time_raw}
+        return safe_planning_time_dict, safe_planning_time_raw
 
     def load_trajectory_data(self):
-        self.trajectory_data_raw = np.load(os.path.join(self.result_root, "trajectory.npy"))
-        total_time_steps = self.trajectory_data_raw.shape[0]
-        trajectory_dict= {int(row[3]): row[:3].tolist() for row in self.trajectory_data_raw}
-        return trajectory_dict, total_time_steps
+        trajectory_data_raw = np.load(os.path.join(self.result_root, "trajectory.npy"))
+        if self.safe_controller:
+            # cut the data that is recorded before the robot started
+            start_index = self.get_robot_start_index(trajectory_data_raw)
+            print(f'trajectory start index: {start_index}')
+            trajectory_data_raw = trajectory_data_raw[start_index:]
+        total_time_steps = trajectory_data_raw.shape[0]
+        trajectory_dict= {int(row[3]): row[:3].tolist() for row in trajectory_data_raw}
+        return trajectory_dict, trajectory_data_raw, total_time_steps
 
     def load_value_function_data(self):
-        self.value_function_data_raw = np.load(os.path.join(self.result_root, "value_function_at_state.npy"))
-        value_function_dict = {int(row[-1]): row[-2] for row in self.value_function_data_raw}
-        return value_function_dict
+        value_function_data_raw = np.load(os.path.join(self.result_root, "value_function_at_state.npy"))
+        value_function_dict = {int(row[-1]): row[-2] for row in value_function_data_raw}
+        return value_function_dict, value_function_data_raw
 
     def load_brt_computation_time(self):
-        self.brt_computation_time_raw = np.load(os.path.join(self.result_root, "brt_computation_time.npy"))
-        brt_computation_time_dict = {int(row[-1]): row[0] for row in self.brt_computation_time_raw}
-        return brt_computation_time_dict
+        brt_computation_time_raw = np.load(os.path.join(self.result_root, "brt_computation_time.npy"))
+        brt_computation_time_dict = {int(row[-1]): row[0] for row in brt_computation_time_raw}
+        return brt_computation_time_dict, brt_computation_time_raw
 
     def load_combined_map_data(self):
         self.combined_map_data_raw = np.load(os.path.join(self.result_root, "combined_map_over_time.npy"))
         print(type(self.combined_map_data_raw))
+
+    def load_vlm_inference_time_data(self):
+        vlm_inference_time_raw = np.load(os.path.join(self.result_root, "vlm_inference_times.npy"))
+        if self.safe_controller:
+            start_index = self.get_robot_start_index(vlm_inference_time_raw)
+            print(f'vlm inference start index: {start_index}')
+            vlm_inference_time_raw = vlm_inference_time_raw[start_index:]
+        vlm_inference_time_dict = {int(row[-1]): row[0] for row in vlm_inference_time_raw}
+        return vlm_inference_time_dict, vlm_inference_time_raw
 
     def make_exp_configs(self):
         exp_config_path = os.path.join(self.result_root, "exp_config.json")
@@ -178,8 +226,16 @@ class SceneReconstruction():
 
         return override_counter / global_counter
 
-    def compute_time_for_action_with_safety(self):
-        pass
+    def compute_time_for_action(self):
+        total_nominal_planning_time = np.sum(self.nominal_planning_time_raw[:, 0])
+        total_vlm_inference_time = np.sum(self.vlm_inference_time_raw[:, 0])
+        total_time = total_nominal_planning_time + total_vlm_inference_time
+        if self.safe_controller:
+            total_brt_time = np.sum(self.brt_computation_time_raw[:, 0])
+            total_safe_planning_time = np.sum(self.safe_planning_time_raw[:, 0])
+            total_time += total_brt_time + total_safe_planning_time
+        return total_time / self.total_action_taken
+
 
     def make_scene_path(self):
         scene_path = None
@@ -222,6 +278,9 @@ class SceneReconstruction():
 
     def compute_average_safe_planning_time(self):
         return np.mean(self.safe_planning_time_raw[:, 0])
+
+    def compute_average_vlm_inference_time(self):
+        return np.mean(self.vlm_inference_time_raw[:, 0])
 
     def reproduce_trajectory(self):
         rate = rospy.Rate(1)
@@ -287,13 +346,16 @@ class SceneReconstruction():
 
     def print_summary(self):
         print("**************************************************************")
-        print("experiment summery: ")
-        print(f"Safety Override Rate:          {self.safety_override_rate:10.2f}")
-        print(f"Trajectory Cost:               {self.trajectory_cost:10.2f}")
-        print(f"Average Nominal Planning Time: {self.average_nominal_planning_time:10.2f}s")
-        print(f"Average Safety Planning Time:  {self.average_safe_planning_time:10.2f}s")
-        print(f"Average BRT Computation Time:  {self.average_brt_computation_time:10.2f}s")
-        print(f"Total Execution Time:          {self.total_exe_time:10.2f}s")
+        print("Experiment Summery: ")
+        print(f"Safety Override Rate:                   {self.safety_override_rate:10.2f}")
+        print(f"Trajectory Cost:                        {self.trajectory_cost:10.2f}")
+        print(f"Total Action Taken:                     {self.total_action_taken:10}")
+        print(f"Average Nominal Planning Time:          {self.average_nominal_planning_time:10.2f}s")
+        print(f"Average Safety Planning Time:           {self.average_safe_planning_time:10.2f}s")
+        print(f"Average BRT Computation Time:           {self.average_brt_computation_time:10.2f}s")
+        print(f"Average VLM Inference Time:             {self.average_vlm_inference_time:10.2f}s")
+        print(f"Average Compuatation Time Per Action:   {self.average_time_per_action:10.2f}s")
+        print(f"Total Execution Time:                   {self.total_exe_time:10.2f}s")
         print("**************************************************************")
 
 
@@ -303,7 +365,6 @@ if __name__ == '__main__':
     rospy.init_node("evaluation_node")
 
     stage = SceneReconstruction(result_root)
-    stage.reproduce_trajectory()
+    # stage.reproduce_trajectory()
     # stage.reproduce_trme("semantic_map", 15)
-    #     # stage.reproduce_tajectory()
     stage.print_summary()
