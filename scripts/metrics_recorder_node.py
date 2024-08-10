@@ -38,7 +38,7 @@ class MetricsRecorderNode:
         self.failure_at_state = []
         self.nominal_planning_time = []
         self.safe_planning_time = []
-        self.brt_computation_time = []
+        self.brt_computation_time = None
         self.map_size_meters = None
         self.floorplan = None
         self.combined_map_over_time = None
@@ -101,13 +101,13 @@ class MetricsRecorderNode:
             top_right = bottom_left + np.array([msg.info.width, msg.info.height]) * msg.info.resolution
             self.map_size_meters = np.vstack((bottom_left, top_right))
 
-    def constraints_map_callback(self, msg: OccupancyGrid):
-        combined_map_now = np.reshape(msg.data, (msg.info.height, msg.info.width))
-        if self.combined_map_over_time is None:
-            self.combined_map_over_time = combined_map_now
-        else:
-            self.combined_map_over_time = np.dstack((self.combined_map_over_time, combined_map_now))
-        self.combined_map_times.append(self.get_time_since_start())
+    # def constraints_map_callback(self, msg: OccupancyGrid):
+    #     combined_map_now = np.reshape(msg.data, (msg.info.height, msg.info.width))
+    #     if self.combined_map_over_time is None:
+    #         self.combined_map_over_time = combined_map_now
+    #     else:
+    #         self.combined_map_over_time = np.dstack((self.combined_map_over_time, combined_map_now))
+    #     self.combined_map_times.append(self.get_time_since_start())
 
     def semantic_map_callback(self, msg: OccupancyGrid):
         semantic_map_now = np.reshape(msg.data, (msg.info.height, msg.info.width))
@@ -124,7 +124,10 @@ class MetricsRecorderNode:
         self.safe_planning_time.append([msg.data, self.get_time_since_start()])
 
     def brt_computation_time_callback(self, msg: Float32):
-        self.brt_computation_time.append([msg.data, self.get_time_since_start()])
+        if self.brt_computation_time is None:
+            self.brt_computation_time = np.array([msg.data, self.get_time_since_start()])
+        else:
+            self.brt_computation_time = np.vstack((self.brt_computation_time, [msg.data, self.get_time_since_start()]))
 
     def text_queries_callback(self, msg: String):
         query = msg.data
@@ -159,10 +162,13 @@ class MetricsRecorderNode:
         np.save(os.path.join(self.save_path, "brt_computation_time.npy"), self.brt_computation_time)
         np.save(os.path.join(self.save_path, "map_size_meters.npy"), self.map_size_meters)
         np.save(os.path.join(self.save_path, "floorplan.npy"), self.floorplan)
-        np.save(os.path.join(self.save_path, "combined_map_over_time.npy"), self.combined_map_over_time)
         np.save(os.path.join(self.save_path, "semantic_map_over_time.npy"), self.semantic_map_over_time)
         np.save(os.path.join(self.save_path, "semantic_map_times.npy"), self.semantic_map_times)
-        np.save(os.path.join(self.save_path, "combined_times.npy"), self.combined_times)
+
+        # not being recorder. currently setup is: we save floorplan.npy and semantic_map_over_time.npy and combine them
+        # in a post processing step
+        # np.save(os.path.join(self.save_path, "combined_map_over_time.npy"), self.combined_map_over_time)  # not b
+        # np.save(os.path.join(self.save_path, "combined_times.npy"), self.combined_times)
 
         with open(os.path.join(self.save_path, "text_queries.txt"), "w") as file:
             for query in self.text_queries:

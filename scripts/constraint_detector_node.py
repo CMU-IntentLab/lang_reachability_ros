@@ -88,7 +88,7 @@ class ConstraintDetectorNode:
         self.rgb_img = self.bridge.imgmsg_to_cv2(msg, desired_encoding="rgb8")
 
     def depth_img_callback(self, msg: Image):
-        self.depth_img = self.bridge.imgmsg_to_cv2(msg, desired_encoding="16UC1")/1000
+        self.depth_img = self.bridge.imgmsg_to_cv2(msg, desired_encoding="passthrough") #/1000 uncomment if using the realsense camera
 
     def camera_info_callback(self, msg: CameraInfo):
         if self.K is None or self.K_inv is None:
@@ -156,7 +156,7 @@ class ConstraintDetectorNode:
         self.constaints_grid_map_pub.publish(msg)
 
     def get_camera_extrinsics_matrix(self):
-        transform_camera_to_map = self.tf_buffer.lookup_transform('camera_depth_optical_frame', 'map', rospy.Time(0), rospy.Duration(1.0))
+        transform_camera_to_map = self.tf_buffer.lookup_transform('camera_link', 'map', rospy.Time(0), rospy.Duration(1.0))
         t = transform_camera_to_map.transform.translation
         q = transform_camera_to_map.transform.rotation
 
@@ -168,7 +168,7 @@ class ConstraintDetectorNode:
         return matrix
     
     def get_inv_camera_extrinsics_matrix(self):
-        transform_camera_to_map = self.tf_buffer.lookup_transform('map', 'camera_depth_optical_frame', rospy.Time(0), rospy.Duration(1.0))
+        transform_camera_to_map = self.tf_buffer.lookup_transform('map', 'camera_link', rospy.Time(0), rospy.Duration(1.0))
         t = transform_camera_to_map.transform.translation
         q = transform_camera_to_map.transform.rotation
 

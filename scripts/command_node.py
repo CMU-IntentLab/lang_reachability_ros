@@ -36,7 +36,7 @@ class CommandNode:
         theta = 0.0
         goal = PoseStamped()
         goal.header.stamp = rospy.Time.now()
-        goal.header.frame_id = "odom"
+        goal.header.frame_id = "map"
 
         goal.pose.position.x = self.goal[0]
         goal.pose.position.y = self.goal[1]

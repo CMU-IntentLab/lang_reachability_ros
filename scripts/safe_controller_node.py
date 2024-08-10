@@ -30,13 +30,16 @@ class SafeControllerNode:
         self.semantic_grid_map = None
         self.last_updated = -1
         self.brt_computed = False
-        self.unsafe_level = 0.35
+
+        self.brt_update_interval = 4
+        self.epsilon = 0.001
+        self.unsafe_level = 0.3
 
         self.tf_buffer = tf2_ros.Buffer()
         self.listener = tf2_ros.TransformListener(self.tf_buffer)
 
         self.robot_pose_sub = rospy.Subscriber(self.topics_names["pose"], PoseWithCovarianceStamped, callback=self.robot_pose_callback)
-        self.robot_odom_sub = rospy.Subscriber(self.topics_names["odom"], Odometry, callback=self.odom_callback)
+        # self.robot_odom_sub = rospy.Subscriber(self.topics_names["odom"], Odometry, callback=self.odom_callback)
         self.nominal_action_sub = rospy.Subscriber(self.topics_names["nominal_action"], Twist, queue_size=1, callback=self.nominal_action_callback)
         self.floorplan_sub = rospy.Subscriber(self.topics_names["grid_map"], OccupancyGrid, callback=self.floorplan_callback)
         self.semantic_map_sub = rospy.Subscriber(self.topics_names["semantic_grid_map"], OccupancyGrid, callback=self.semantic_map_callback)
@@ -63,35 +66,16 @@ class SafeControllerNode:
         return topics_names
     
     def robot_pose_callback(self, msg: PoseWithCovarianceStamped):
-        return
         pos = msg.pose.pose.position
         quat = msg.pose.pose.orientation
         euler = tft.euler_from_quaternion([quat.x, quat.y, quat.z, quat.w])
         self.robot_pose = np.array([pos.x, pos.y, euler[2]])
 
-    def odom_callback(self, msg: Odometry):
-        do_transform = False
-        if do_transform:
-            transform = self.tf_buffer.lookup_transform('map', 'locobot/odom', rospy.Time(0))
-            pose_stamped = PoseStamped()
-            pose_stamped.header = msg.header
-            pose_stamped.pose = msg.pose.pose
-            pose_map = tf2_geometry_msgs.do_transform_pose(pose_stamped, transform)
-            pos = pose_map.pose.position
-            quat = pose_map.pose.orientation
-            euler = tft.euler_from_quaternion([quat.x, quat.y, quat.z, quat.w])
-            self.robot_pose = np.array([pos.x, pos.y, euler[2]])
-        else:
-            pos = msg.pose.pose.position
-            quat = msg.pose.pose.orientation
-            euler = tft.euler_from_quaternion([quat.x, quat.y, quat.z, quat.w])
-            self.robot_pose = np.array([pos.x, pos.y, euler[2]])
-        # if self.robot_init_pose is not None:
-            # pos = msg.pose.pose.position
-            # quat = msg.pose.pose.orientation
-            # euler = tft.euler_from_quaternion([quat.x, quat.y, quat.z, quat.w])
-            # odom = np.array([pos.x, pos.y, euler[2]])
-            # self.robot_pose = self.robot_init_pose + odom
+    # def odom_callback(self, msg: Odometry):
+    #     pos = msg.pose.pose.position
+    #     quat = msg.pose.pose.orientation
+    #     euler = tft.euler_from_quaternion([quat.x, quat.y, quat.z, quat.w])
+    #     self.robot_pose = np.array([pos.x, pos.y, euler[2]])
 
     def nominal_action_callback(self, msg: Twist):
         if self.brt_computed:
@@ -140,10 +124,12 @@ class SafeControllerNode:
             rospy.loginfo("Computing warm-started BRT.")
 
         start_time = rospy.Time.now().secs
-        self.values = self.reachability_solver.solve(constraints_grid_map, epsilon=0.005)
+        self.values = self.reachability_solver.solve(constraints_grid_map, epsilon=self.epsilon)
         end_time = rospy.Time.now().secs
         time_taken = end_time - start_time
-        self.brt_computation_time_pub.publish(Float32(data=time_taken))
+        msg = Float32()
+        msg.data = time_taken
+        self.brt_computation_time_pub.publish(msg)
 
         self.brt_computed = True
         self.last_updated = end_time
@@ -184,7 +170,7 @@ class SafeControllerNode:
         rospy.loginfo(f"domain = {domain_low, domain_high}")
         converged_values = np.load("/home/leo/riss_ws/src/lang_reachability_ros/lab_value_function.npy")
         self.reachability_solver = reachability.ReachabilitySolver(system="unicycle3d", 
-                                                                    domain=[[domain_low[0], domain_low[1]],[domain_high[0], domain_high[1]]],
+                                                                    domain=[[domain_low[1], domain_low[0]],[domain_high[1], domain_high[0]]],
                                                                     unsafe_level=self.unsafe_level,
                                                                     converged_values=None,
                                                                     mode="brt", accuracy="low")
@@ -248,14 +234,12 @@ class SafeControllerNode:
             msg.info.height = np.shape(self.grid_map)[0]
             msg.info.width = np.shape(self.grid_map)[1]
             msg.info.resolution = self.map_resolution
-            ori = self.robot_pose[2]
-            if ori < 0:
-                ori += 2*np.pi
+            ori = np.pi/2 - self.robot_pose[2]
             ori_idx = int(ori/(2*np.pi)*np.shape(self.values)[2])
             data = self.values[:, :, ori_idx]
             data = data.flatten()
-            data[data < self.unsafe_level] = 0
-            data[data > self.unsafe_level] = 100
+            data[data < 0] = 0
+            data[data > 0] = 100
             data = 100 - data
             msg.data = tuple(data.astype(int))
             self.brt_viz_pub.publish(msg)
@@ -273,16 +257,15 @@ if __name__ == '__main__':
     # floorplan = np.load("/home/leo/git/hj_reachability/top_down_map.npy")
     solver_node = SafeControllerNode(args)
 
-    rospy.sleep(15)
+    rospy.sleep(5)
     
     # enforce first BRT computation
     while not solver_node.brt_computed and not rospy.is_shutdown():
         solver_node.compute_brt()
 
-    brt_update_interval = 3000
     rate = rospy.Rate(10)
     while not rospy.is_shutdown():
-        if rospy.Time.now().secs - solver_node.last_updated >= brt_update_interval:
+        if rospy.Time.now().secs - solver_node.last_updated >= solver_node.brt_update_interval:
             solver_node.compute_brt()
         solver_node._publish_brt_viz()
         rate.sleep()
