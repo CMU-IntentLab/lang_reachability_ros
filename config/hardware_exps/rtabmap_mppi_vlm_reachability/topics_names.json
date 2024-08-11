@@ -1,20 +1,19 @@
 {
     "ground_truth_pose": "/gt_pose",
-    "odom": "/locobot/mobile_base/odom",
+    "odom": "/odom",
     "pose": "/rtabmap/localization_pose",
     "sim_global_pose": "/global_pose",
 
-    "rgb_image": "/camera/color/image_raw",
-    "depth_image": "/camera/depth/image_rect_raw",
-    "camera_info": "/camera/color/camera_info",
+    "rgb_image": "/rgb/image",
+    "depth_image": "/depth/image",
+    "camera_info": "/rgb/camera_info",
 
     "language_constraint": "/language_constraint",
     "vlm_detections": "/vlm_detections",
 
     "goal": "/goal",
     "nominal_action": "/nominal_cmd_vel",
-    "dummy_action": "/locobot/mobile_base/commands/velocity",
-    "safe_action": "/locobot/mobile_base/commands/velocity",
+    "safe_action": "/cmd_vel",
     "trajectory_visualization": "/vis_trajectories",
 
     "floor_plan": "/floor_plan",

@@ -1,8 +1,18 @@
 {
-  "exp_name": "mppi_vlm",
-  "platform": "hardware",
-  "text_queries": ["avoid the rug"],
-  "score_threshold": 0.3,
-  "goal": [4, -5.0],
-  "results_path": "/home/leo/riss_ws/src/lang_reachability_ros/experiments/hardware/scenario1"
+  "exp_name": "rtabmap_mppi_vlm",
+  "platform": "simulator",
+  "results_path": "/home/leo/riss_ws/src/lang_reachability_ros/experiments/hardware/scenario1",
+
+  "vmin": 0.1,
+  "vmax": 1.0,
+  "wmax": 1.0,
+  "goal": [3, -2],
+
+  "text_queries": ["avoid the coffee spill", "avoid the rug"],
+  "score_threshold": [0.12, 0.5],
+
+  "tf_map_frame": "map",
+  "tf_odom_frame": "odom",
+  "tf_base_link_frame": "base_link",
+  "tf_camera_link_frame": "camera_link"
 }

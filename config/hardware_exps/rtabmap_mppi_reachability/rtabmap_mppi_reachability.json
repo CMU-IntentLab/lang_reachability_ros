@@ -1,3 +1,19 @@
 {
-  "exp_name": "rtabmap_mppi_reachability"
+  "exp_name": "rtabmap_mppi_reachability",
+  "platform": "hardware",
+  "results_path": "/home/leo/riss_ws/src/lang_reachability_ros/experiments/hardware/scenario1",
+
+  "vmin": 0.1,
+  "vmax": 1.0,
+  "wmax": 1.0,
+  "goal": [3.5, -5],  
+  
+  "brt_update_interval": 4,
+  "brt_convergence_epsilon": 0.001,
+  "brt_unsafe_level": 0.2,
+
+  "tf_map_frame": "map",
+  "tf_odom_frame": "odom",
+  "tf_base_link_frame": "base_link",
+  "tf_camera_link_frame": "camera_link"
 }
