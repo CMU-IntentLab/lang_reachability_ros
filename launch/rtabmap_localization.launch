@@ -21,6 +21,7 @@
 
          <param name="RGBD/StartAtOrigin" type="bool" value="true"/>
          <param name="Mem/IncrementalMemory" type="string" value="false"/>
+         <param name="Rtabmap/DetectionRate" type="string" value="10" />
       </node>
    </group>
 </launch>
