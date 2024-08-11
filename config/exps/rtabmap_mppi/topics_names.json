@@ -21,6 +21,8 @@
     "semantic_grid_map": "/semantic_grid_map",
     "constraints_grid_map": "/constraints_grid_map",
 
+    "brt": "/brt",
+
     "value_function_at_state": "/data/value_function_at_state",
     "failure_set_at_state": "/data/failure_set_at_state",
     "nominal_planning_time": "/data/nominal_planning_time",

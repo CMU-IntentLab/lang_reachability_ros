@@ -13,7 +13,7 @@
 
   "brt_update_interval": 4,
   "brt_convergence_epsilon": 0.001,
-  "brt_unsafe_level": 0.2,
+  "brt_unsafe_level": 0.25,
 
   "tf_map_frame": "map",
   "tf_odom_frame": "odom",
