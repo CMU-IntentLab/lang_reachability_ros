@@ -71,6 +71,7 @@ def start_modules(module_name_list, exp_config_path, topics_names_path):
     module_to_node = {"mppi": "navigation_node",
                       "vlm": "constraint_detector_node",
                       "reachability": "safe_controller_node",
+                      "reachability_solver": "brt_solver_node",
                       "simulator": "simulator_node",
                       "command_node": "command_node",
                       "metrics_recorder_node": "metrics_recorder_node"}
@@ -106,10 +107,14 @@ if __name__ == '__main__':
     topics_names_path = os.path.join(dir_path, 'config', 'hardware_exps', exp_name, "topics_names.json")
 
     module_name_list = exp_configs['exp_name'].split('_')
-    platform = exp_configs["platform"]  # either simulator or hardware
     module_name_list = ["command_node", "metrics_recorder_node"] + module_name_list
+    if "reachability" in module_name_list:
+        module_name_list += ["reachability_solver"]
+
+    platform = exp_configs["platform"]  # either simulator or hardware
     if platform == 'simulator':
         module_name_list = module_name_list + [platform]
+
     node_list = start_modules(module_name_list, exp_configs_path, topics_names_path)
 
     signal.signal(signal.SIGINT, lambda signum, frame: shutdown(node_list))

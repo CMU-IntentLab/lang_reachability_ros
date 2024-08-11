@@ -6,7 +6,7 @@ import rospy
 
 from geometry_msgs.msg import Twist, TwistStamped, PoseWithCovarianceStamped, PoseStamped, Pose
 from nav_msgs.msg import OccupancyGrid, Odometry
-from std_msgs.msg import Float32, Float32MultiArray
+from std_msgs.msg import Float32, Float32MultiArray, MultiArrayDimension
 
 import tf2_ros
 import tf.transformations as tft 
@@ -16,7 +16,7 @@ import numpy as np
 from lang_reachability import reachability
 
 
-class SafeControllerNode:
+class BRTSolverNode:
     def __init__(self, args) -> None:
         self.args = args
         self.exp_config = self.make_exp_config()
@@ -29,8 +29,8 @@ class SafeControllerNode:
         self.grid_map = None
         self.semantic_grid_map = None
         self.last_updated = -1
-        self.values = None
         self.brt_computed = False
+        self.values = None
 
         self.vmin = self.exp_config["vmin"]
         self.vmax = self.exp_config["vmax"]
@@ -42,19 +42,15 @@ class SafeControllerNode:
         self.tf_buffer = tf2_ros.Buffer()
         self.listener = tf2_ros.TransformListener(self.tf_buffer)
 
-        self.brt_sub = rospy.Subscriber(self.topics_names["brt"], Float32MultiArray, callback=self.brt_callback)
         self.robot_pose_sub = rospy.Subscriber(self.topics_names["pose"], PoseWithCovarianceStamped, callback=self.robot_pose_callback)
         # self.robot_odom_sub = rospy.Subscriber(self.topics_names["odom"], Odometry, callback=self.odom_callback)
-        self.nominal_action_sub = rospy.Subscriber(self.topics_names["nominal_action"], Twist, queue_size=1, callback=self.nominal_action_callback)
         self.floorplan_sub = rospy.Subscriber(self.topics_names["grid_map"], OccupancyGrid, callback=self.floorplan_callback)
         self.semantic_map_sub = rospy.Subscriber(self.topics_names["semantic_grid_map"], OccupancyGrid, callback=self.semantic_map_callback)
 
+        self.brt_pub = rospy.Publisher(self.topics_names["brt"], Float32MultiArray, queue_size=10)
         self.constraints_map_pub = rospy.Publisher(self.topics_names["constraints_grid_map"], OccupancyGrid, queue_size=10)
-        self.safe_action_pub = rospy.Publisher(self.topics_names["safe_action"], Twist, queue_size=1)
-        self.safe_action_viz_pub = rospy.Publisher("cmd_vel_viz", TwistStamped, queue_size=1)
         self.value_function_pub = rospy.Publisher(self.topics_names["value_function_at_state"], PoseStamped, queue_size=10)
         self.failure_pub = rospy.Publisher(self.topics_names["failure_set_at_state"], PoseStamped, queue_size=10)
-        self.safe_planning_time_pub = rospy.Publisher(self.topics_names["safe_planning_time"], Float32, queue_size=10)
         self.brt_computation_time_pub = rospy.Publisher(self.topics_names["brt_computation_time"], Float32, queue_size=10)
         self.brt_viz_pub = rospy.Publisher('brt_viz', OccupancyGrid, queue_size=10)
 
@@ -82,36 +78,6 @@ class SafeControllerNode:
     #     euler = tft.euler_from_quaternion([quat.x, quat.y, quat.z, quat.w])
     #     self.robot_pose = np.array([pos.x, pos.y, euler[2]])
 
-    def brt_callback(self, msg: Float32MultiArray):
-        # Extract dimensions N, M, K from the layout information
-        N = msg.layout.dim[0].size
-        M = msg.layout.dim[1].size
-        K = msg.layout.dim[2].size
-
-        # Convert the data back into a numpy array with the extracted shape (N, M, K)
-        self.values = np.array(msg.data).reshape((N, M, K))
-        self.values_grad = np.gradient(self.values)
-        self.brt_computed = True
-
-    def nominal_action_callback(self, msg: Twist):
-        if self.brt_computed and self.reachability_solver is not None:
-            rospy.loginfo("Returning safe action")
-            nominal_action = np.array([msg.linear.x, msg.angular.z])
-            safe_action, value, initial_value = self.compute_safe_control(nominal_action)
-            safe_action_msg = self._construct_twist_msg(safe_action)
-            self.safe_action_pub.publish(safe_action_msg)
-            safe_action_viz_msg = self._construct_twist_stamped_msg(safe_action)
-            self.safe_action_viz_pub.publish(safe_action_viz_msg)
-            value_function_msg = self._construct_pose_stamped_msg([self.robot_pose[0], self.robot_pose[1], value], [0.0, 0.0, self.robot_pose[2]])
-            self.value_function_pub.publish(value_function_msg)
-            failure_msg = self._construct_pose_stamped_msg([self.robot_pose[0], self.robot_pose[1], initial_value], [0.0, 0.0, self.robot_pose[2]])
-            self.failure_pub.publish(failure_msg)
-        else:
-            rospy.loginfo("Returning nominal action")
-            nominal_action = np.array([0, 0])
-            nominal_action_msg = self._construct_twist_msg(nominal_action)
-            self.safe_action_pub.publish(nominal_action_msg)
-
     def floorplan_callback(self, msg: OccupancyGrid):
         # TODO: take initial orientation into account. For now will assume it is always 0
         self.map_origin = np.array([msg.info.origin.position.x, msg.info.origin.position.y])
@@ -126,17 +92,55 @@ class SafeControllerNode:
         msg = self._construct_occupancy_grid_msg(constraints_map)
         self.constraints_map_pub.publish(msg)
 
-    def compute_safe_control(self, nominal_action):
-        if self.robot_pose is None:
-            rospy.logwarn("Robot pose was not received. Cannot compute safe action.")
-            return nominal_action
-        
+    def compute_brt(self):
+        if self.reachability_solver is None:
+            rospy.logwarn("Reachability solver was not initialized yet. Cannot compute BRT.")
+            return
+
+        constraints_grid_map = self.merge_maps()
+        constraints_grid_map = 1 - np.abs(constraints_grid_map)     # make -1 = occupied, 0 = occupied, 1 = free
+
         start_time = rospy.Time.now().secs
-        safe_action, value, initial_values = self.reachability_solver.compute_safe_control(self.robot_pose, nominal_action, self.values, self.values_grad)
-        time_taken = rospy.Time.now().secs - start_time
-        self.safe_planning_time_pub.publish(Float32(data=time_taken))
-        return safe_action, value, initial_values
+        self.values = self.reachability_solver.solve(constraints_grid_map, epsilon=self.epsilon)
+        end_time = rospy.Time.now().secs
+        time_taken = end_time - start_time
+        msg = Float32()
+        msg.data = time_taken
+        self.brt_computation_time_pub.publish(msg)
+
+        self.brt_computed = True
+        self.last_updated = end_time
     
+    def publish_brt(self):
+        if self.values is not None:
+            msg = Float32MultiArray()
+            (N, M, K) = self.values.shape
+            flattened = self.values.flatten()
+
+            # Set the flattened array as the data
+            msg.data = flattened.tolist()
+
+            # Set up the dimensions
+            dim = MultiArrayDimension()
+            dim.label = "N"
+            dim.size = N
+            dim.stride = N*M*K
+            msg.layout.dim.append(dim)
+
+            dim = MultiArrayDimension()
+            dim.label = "M"
+            dim.size = M
+            dim.stride = M*K
+            msg.layout.dim.append(dim)
+
+            dim = MultiArrayDimension()
+            dim.label = "K"
+            dim.size = K
+            dim.stride = K
+            msg.layout.dim.append(dim)
+
+            self.brt_pub.publish(msg)
+
     def merge_maps(self):
         """
         merges rtabmap and owl-vit constraints occupancy maps
@@ -177,43 +181,6 @@ class SafeControllerNode:
         msg.info.width = map_data.shape[1]
         msg.data = map_data.flatten()
         return msg
-
-    def _construct_twist_msg(self, action):
-        """
-        construct geometry_msgs/Twist assuming action = [v, w]
-        """
-        msg = Twist()
-        msg.linear.x = action[0]
-        msg.angular.z = action[1]
-        return msg
-    
-    def _construct_twist_stamped_msg(self, action):
-        """
-        construct geometry_msgs/Twist assuming action = [v, w]
-        """
-        msg = TwistStamped()
-        msg.header.frame_id = "locobot/base_link"
-        msg.header.stamp = rospy.Time.now()
-        msg.twist.linear.x = action[0]
-        msg.twist.angular.z = action[1]
-        return msg
-    
-    def _construct_pose_stamped_msg(self, pos, ori):
-        """
-        construct geometry_msgs/Pose assuming pos = [x, y, z], ori = [roll, pitch, yaw]
-        """
-        quat = tft.quaternion_from_euler(ai=ori[0], aj=ori[1], ak=ori[2])
-        msg = PoseStamped()
-        msg.header.stamp = rospy.Time.now()
-        msg.pose.position.x = pos[0]
-        msg.pose.position.y = pos[1]
-        msg.pose.position.z = pos[2]
-        
-        msg.pose.orientation.x = quat[0]
-        msg.pose.orientation.y = quat[1]
-        msg.pose.orientation.z = quat[2]
-        msg.pose.orientation.w = quat[3]
-        return msg
     
     def _publish_brt_viz(self):
         if self.brt_computed:
@@ -244,12 +211,20 @@ if __name__ == '__main__':
     assert args.exp_path is not None, "a experiment config file must be provided"
     assert args.topics_path is not None, "topics names json file must be provided"
 
-    rospy.init_node("safe_controller_node")
+    rospy.init_node("brt_solver_node")
     # floorplan = np.load("/home/leo/git/hj_reachability/top_down_map.npy")
-    solver_node = SafeControllerNode(args)
+    solver_node = BRTSolverNode(args)
 
     rospy.sleep(5)
+    
+    # enforce first BRT computation
+    while not solver_node.brt_computed and not rospy.is_shutdown():
+        solver_node.compute_brt()
 
     rate = rospy.Rate(10)
     while not rospy.is_shutdown():
+        if rospy.Time.now().secs - solver_node.last_updated >= solver_node.brt_update_interval:
+            solver_node.compute_brt()
+        solver_node.publish_brt()
+        solver_node._publish_brt_viz()
         rate.sleep()
