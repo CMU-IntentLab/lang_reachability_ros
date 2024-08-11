@@ -12,8 +12,8 @@
     "vlm_detections": "/vlm_detections",
 
     "goal": "/goal",
-    "nominal_action": "/nominal_cmd_vel",
-    "safe_action": "/cmd_vel",
+    "nominal_action": "/cmd_vel",
+    "safe_action": "NA",
     "trajectory_visualization": "/vis_trajectories",
 
     "floor_plan": "/floor_plan",
