@@ -18,7 +18,10 @@ import json
 class NavigationNode:
     def __init__(self, args):
         self.args = args
+        self.exp_config = self.make_exp_config()
         self.topics_names = self.make_topics_names()
+
+        self.tf_map_frame = self.exp_config["tf_map_frame"]
 
         self.path_msg = Path()
 
@@ -29,7 +32,7 @@ class NavigationNode:
 
         self._device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         self._dtype = torch.float32
-        self._navigator = navigator.Navigator(planner_type="mppi", device=self._device, dtype=self._dtype, dt=0.1)
+        self._navigator = navigator.Navigator(config=self.exp_config, planner_type="mppi", device=self._device, dtype=self._dtype, dt=0.1)
         self.navigator_ready = False
 
         self._odom = None
@@ -38,6 +41,12 @@ class NavigationNode:
 
         self._goal_thresh = 0.1
 
+    def make_exp_config(self):
+        self.exp_path = self.args.exp_path
+        with open(self.exp_path, 'r') as f:
+            exp_config = json.load(f)
+        return exp_config
+    
     def make_topics_names(self):
         self.topics_path = self.args.topics_path
         with open(self.topics_path, 'r') as f:
@@ -127,7 +136,7 @@ class NavigationNode:
         marker_array = MarkerArray()
         for k in range(trajectories.shape[0]):
             marker = Marker()
-            marker.header.frame_id = "map"
+            marker.header.frame_id = self.tf_map_frame
             marker.header.stamp = rospy.Time.now()
             marker.ns = "sampled_trajectories"
             marker.id = k

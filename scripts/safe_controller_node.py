@@ -9,7 +9,6 @@ from nav_msgs.msg import OccupancyGrid, Odometry
 from std_msgs.msg import Float32
 
 import tf2_ros
-import tf2_geometry_msgs.tf2_geometry_msgs
 import tf.transformations as tft 
 
 import numpy as np
@@ -20,6 +19,7 @@ from lang_reachability import reachability
 class SafeControllerNode:
     def __init__(self, args) -> None:
         self.args = args
+        self.exp_config = self.make_exp_config()
         self.topics_names = self.make_topics_names()
 
         self.reachability_solver = None
@@ -31,9 +31,12 @@ class SafeControllerNode:
         self.last_updated = -1
         self.brt_computed = False
 
-        self.brt_update_interval = 4
-        self.epsilon = 0.001
-        self.unsafe_level = 0.3
+        self.vmin = self.exp_config["vmin"]
+        self.vmax = self.exp_config["vmax"]
+        self.wmax = self.exp_config["wmax"]
+        self.brt_update_interval = self.exp_config["brt_update_interval"]
+        self.epsilon = self.exp_config["brt_convergence_epsilon"]
+        self.unsafe_level = self.exp_config["brt_unsafe_level"]
 
         self.tf_buffer = tf2_ros.Buffer()
         self.listener = tf2_ros.TransformListener(self.tf_buffer)
@@ -90,7 +93,6 @@ class SafeControllerNode:
             failure_msg = self._construct_pose_stamped_msg([self.robot_pose[0], self.robot_pose[1], initial_value], [0.0, 0.0, self.robot_pose[2]])
             self.failure_pub.publish(failure_msg)
         else:
-            # rospy.logwarn("BRT was not computed yet. Sending 0 velocity!")
             nominal_action = np.array([0, 0])
             nominal_action_msg = self._construct_twist_msg(nominal_action)
             self.safe_action_pub.publish(nominal_action_msg)
@@ -116,12 +118,6 @@ class SafeControllerNode:
 
         constraints_grid_map = self.merge_maps()
         constraints_grid_map = 1 - np.abs(constraints_grid_map)     # make -1 = occupied, 0 = occupied, 1 = free
-        rospy.loginfo(f"grid map shape = {np.shape(constraints_grid_map)}")
-
-        if not self.brt_computed:
-            rospy.loginfo("Computing initial BRT. This may (it probably will) take a while.")
-        else:
-            rospy.loginfo("Computing warm-started BRT.")
 
         start_time = rospy.Time.now().secs
         self.values = self.reachability_solver.solve(constraints_grid_map, epsilon=self.epsilon)
@@ -133,7 +129,6 @@ class SafeControllerNode:
 
         self.brt_computed = True
         self.last_updated = end_time
-        rospy.loginfo("Finished BRT computation")
 
     def compute_safe_control(self, nominal_action):
         if self.robot_pose is None:
@@ -167,11 +162,11 @@ class SafeControllerNode:
         size_x = self.grid_map.shape[1] * self.map_resolution
         domain_low = self.map_origin
         domain_high = domain_low + np.array([size_x, size_y])
-        rospy.loginfo(f"domain = {domain_low, domain_high}")
         converged_values = np.load("/home/leo/riss_ws/src/lang_reachability_ros/lab_value_function.npy")
         self.reachability_solver = reachability.ReachabilitySolver(system="unicycle3d", 
                                                                     domain=[[domain_low[1], domain_low[0]],[domain_high[1], domain_high[0]]],
                                                                     unsafe_level=self.unsafe_level,
+                                                                    vmin=self.vmin, vmax=self.vmax, wmax=self.wmax,
                                                                     converged_values=None,
                                                                     mode="brt", accuracy="low")
 

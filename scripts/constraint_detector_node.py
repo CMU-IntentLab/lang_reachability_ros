@@ -17,8 +17,6 @@ from geometry_msgs.msg import PoseWithCovarianceStamped
 import numpy as np
 import cv2
 
-# TODO:
-# - save previously detected constraints. self.__init_semantic_map is being called every time we receive a new map from rtabmap!!
 
 class ConstraintDetectorNode:
     def __init__(self, args) -> None:
@@ -30,12 +28,14 @@ class ConstraintDetectorNode:
         self.robot_pose = None
 
         # camera params
+        self.tf_camera_link_frame = self.exp_config["tf_camera_link_frame"]
         self.K = None
         self.K_inv = None
         self.T = None
         self.T_inv = None
 
         # map params
+        self.tf_map_frame = self.exp_config["tf_map_frame"]
         self.resolution = None
         self.origin = None
         self.semantic_grid_map = None
@@ -57,7 +57,10 @@ class ConstraintDetectorNode:
         self.camera_info_sub = rospy.Subscriber(self.topics_names["camera_info"], CameraInfo, callback=self.camera_info_callback)
         self.robot_pose_sub = rospy.Subscriber(self.topics_names["pose"], PoseWithCovarianceStamped, callback=self.robot_pose_callback)
 
-        rospy.loginfo(f"Initialized VLM with the following cofigs: [language constraints: {self.object_detector.text_queries}\nscore threshold: {self.object_detector.score_threshold}]")
+        rospy.loginfo(f"Initialized VLM with the following cofigs: [ \
+                        language constraints: {self.object_detector.text_queries} \n \
+                        score threshold: {self.object_detector.score_threshold} \
+                        ]")
 
     def make_exp_config(self):
         self.exp_path = self.args.exp_path
@@ -156,7 +159,7 @@ class ConstraintDetectorNode:
         self.constaints_grid_map_pub.publish(msg)
 
     def get_camera_extrinsics_matrix(self):
-        transform_camera_to_map = self.tf_buffer.lookup_transform('camera_link', 'map', rospy.Time(0), rospy.Duration(1.0))
+        transform_camera_to_map = self.tf_buffer.lookup_transform(self.tf_camera_link_frame, self.tf_map_frame, rospy.Time(0), rospy.Duration(1.0))
         t = transform_camera_to_map.transform.translation
         q = transform_camera_to_map.transform.rotation
 
@@ -168,7 +171,7 @@ class ConstraintDetectorNode:
         return matrix
     
     def get_inv_camera_extrinsics_matrix(self):
-        transform_camera_to_map = self.tf_buffer.lookup_transform('map', 'camera_link', rospy.Time(0), rospy.Duration(1.0))
+        transform_camera_to_map = self.tf_buffer.lookup_transform(self.tf_map_frame, self.tf_camera_link_frame, rospy.Time(0), rospy.Duration(1.0))
         t = transform_camera_to_map.transform.translation
         q = transform_camera_to_map.transform.rotation
 
@@ -213,7 +216,7 @@ class ConstraintDetectorNode:
     def __construct_map_msg(self, grid_map: np.array):
         msg = OccupancyGrid()
         msg.header.stamp = rospy.Time.now()
-        msg.header.frame_id = "map"
+        msg.header.frame_id = self.tf_map_frame
         msg.data = tuple(grid_map.flatten().astype(int))
         msg.info.resolution = self.resolution
         msg.info.height = grid_map.shape[0]

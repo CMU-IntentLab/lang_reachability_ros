@@ -19,7 +19,16 @@ from sensor_msgs.msg import CameraInfo, Image
 from nav_msgs.msg import Odometry, OccupancyGrid
 
 class SimulatorNode:
-    def __init__(self, dataset_name, test_scene, test_scene_name, dt=0.01, init_x=0.0, init_y=0.0, init_theta=0.0) -> None:
+    def __init__(self, args, dataset_name, test_scene, test_scene_name, dt=0.01, init_x=0.0, init_y=0.0, init_theta=0.0) -> None:
+        self.args = args
+        self.exp_config = self.make_exp_config()
+        self.topics_names = self.make_topics_names()
+
+        self.tf_map_frame = self.exp_config["tf_map_frame"]
+        self.tf_odom_frame = self.exp_config["tf_odom_frame"]
+        self.tf_base_link_frame = self.exp_config["tf_base_link_frame"]
+        self.tf_camera_link_frame = self.exp_config["tf_camera_link_frame"]
+    
         self.sim = sim.Simulator(dataset_name=dataset_name, test_scene=test_scene, test_scene_name=test_scene_name,
                                  initial_state=[init_x, init_y, init_theta], dt=dt)
         # self.robot = systems.Unicycle3D(dt=dt)
@@ -29,21 +38,33 @@ class SimulatorNode:
         self.init_y = init_y
         self.init_theta = init_theta
         self.robot_pose_pub = rospy.Publisher("gt_pose", Pose, queue_size=10)
-        self.odom_pub = rospy.Publisher("odom", Odometry, queue_size=10)
-        self.robot_view_rgb_pub = rospy.Publisher("rgb/image", Image, queue_size=10)
-        self.robot_view_depth_pub = rospy.Publisher("depth/image", Image, queue_size=10)
-        self.camera_info_pub = rospy.Publisher("rgb/camera_info", CameraInfo, queue_size=10)
-        self.map_pub = rospy.Publisher("floor_plan", OccupancyGrid, queue_size=10)
+        self.odom_pub = rospy.Publisher(self.topics_names["odom"], Odometry, queue_size=10)
+        self.robot_view_rgb_pub = rospy.Publisher(self.topics_names["rgb_image"], Image, queue_size=10)
+        self.robot_view_depth_pub = rospy.Publisher(self.topics_names["depth_image"], Image, queue_size=10)
+        self.camera_info_pub = rospy.Publisher(self.topics_names["camera_info"], CameraInfo, queue_size=10)
+        self.map_pub = rospy.Publisher(self.topics_names["floor_plan"], OccupancyGrid, queue_size=10)
         self.global_pose_pub = rospy.Publisher("global_pose", PoseWithCovarianceStamped, queue_size=10)
 
         self.cmd_vel_sub = rospy.Subscriber("cmd_vel", Twist, callback=self.cmd_vel_callback)
-        self.goal_sub = rospy.Subscriber("goal", PoseStamped, callback=self.goal_callback)
+        self.goal_sub = rospy.Subscriber(self.topics_names["goal"], PoseStamped, callback=self.goal_callback)
 
         self.broadcaster = tf2_ros.StaticTransformBroadcaster()
         
         self.vel = [0.0, 0.0]
         print('simulator node initialized')
 
+    def make_exp_config(self):
+        self.exp_path = self.args.exp_path
+        with open(self.exp_path, 'r') as f:
+            exp_config = json.load(f)
+        return exp_config
+    
+    def make_topics_names(self):
+        self.topics_path = self.args.topics_path
+        with open(self.topics_path, 'r') as f:
+            topics_names = json.load(f)
+        return topics_names
+    
     def goal_callback(self, msg: PoseStamped):
         # print(f"goal received: x={msg.pose.position.x}")
         pass
@@ -76,7 +97,7 @@ class SimulatorNode:
 
         floorplan.header = Header()
         floorplan.header.stamp = rospy.Time.now()
-        floorplan.header.frame_id = "map"
+        floorplan.header.frame_id = self.exp_config["tf_map_frame"]
 
         floorplan.info.resolution = self.sim.map_resolution
         floorplan.info.width = floorplan_data.shape[1]
@@ -117,7 +138,7 @@ class SimulatorNode:
         pose = PoseWithCovarianceStamped()
 
         pose.header.stamp = rospy.Time.now()
-        pose.header.frame_id = "map"
+        pose.header.frame_id = self.tf_map_frame
 
         x, y, theta = self.sim.robot_state_world
 
@@ -142,8 +163,8 @@ class SimulatorNode:
         odom = Odometry()
         
         odom.header.stamp = rospy.Time.now()
-        odom.header.frame_id = "odom"
-        odom.child_frame_id = "base_link"
+        odom.header.frame_id = self.tf_odom_frame
+        odom.child_frame_id = self.tf_base_link_frame
         
         odom.pose.pose.position.x = x
         odom.pose.pose.position.y = y
@@ -171,7 +192,7 @@ class SimulatorNode:
         camera_info = CameraInfo()
 
         camera_info.header.stamp = rospy.Time.now()
-        camera_info.header.frame_id = "camera_link"
+        camera_info.header.frame_id = self.tf_camera_link_frame
         
         # Set the intrinsic camera matrix (K) - must be a 3x3 matrix
         camera_info.K = K.flatten().tolist()
@@ -200,8 +221,8 @@ class SimulatorNode:
         static_transform = TransformStamped()
 
         static_transform.header.stamp = rospy.Time.now()
-        static_transform.header.frame_id = "map"
-        static_transform.child_frame_id = "odom"
+        static_transform.header.frame_id = self.tf_map_frame
+        static_transform.child_frame_id = self.tf_odom_frame
 
         static_transform.transform.translation.x = self.init_x
         static_transform.transform.translation.y = self.init_y
@@ -217,8 +238,8 @@ class SimulatorNode:
         static_transform = TransformStamped()
 
         static_transform.header.stamp = rospy.Time.now()
-        static_transform.header.frame_id = "base_link"
-        static_transform.child_frame_id = "camera_link"
+        static_transform.header.frame_id = self.tf_base_link_frame
+        static_transform.child_frame_id = self.tf_camera_link_frame
 
         static_transform.transform.translation.x = 0.0
         static_transform.transform.translation.y = 0.0
@@ -234,8 +255,8 @@ class SimulatorNode:
         transform = TransformStamped()
 
         transform.header.stamp = rospy.Time.now()
-        transform.header.frame_id = "odom"
-        transform.child_frame_id = "base_link"
+        transform.header.frame_id = self.tf_odom_frame
+        transform.child_frame_id = self.tf_base_link_frame
 
         transform.transform.translation.x = x
         transform.transform.translation.y = y
@@ -307,11 +328,19 @@ def setup_data():
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Command Node")
+    parser.add_argument('--exp_path', type=str, default=None, help='path to experiment json file')
+    parser.add_argument('--topics_path', type=str, default=None, help='path to ROS topics names json file')
+    args = parser.parse_args()
+
+    assert args.exp_path is not None, "a experiment config file must be provided"
+    assert args.topics_path is not None, "topics names json file must be provided"
+
     rospy.init_node("simulator")
     rate = rospy.Rate(10)
 
     dataset_name, test_scene, test_scene_name = setup_data()
-    sim_node = SimulatorNode(dataset_name=dataset_name, test_scene=test_scene, test_scene_name=test_scene_name, init_x=0.5, init_y=3.5, init_theta=1.5)
+    sim_node = SimulatorNode(args=args, dataset_name=dataset_name, test_scene=test_scene, test_scene_name=test_scene_name, init_x=0.5, init_y=3.5, init_theta=1.5)
 
     while not rospy.is_shutdown():
         sim_node.update_sim()
