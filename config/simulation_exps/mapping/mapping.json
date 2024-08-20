@@ -1,0 +1,18 @@
+{
+  "exp_name": "mapping",
+  "data_root": "/home/zli133/shared/data/habitat",
+  "dataset_name": "hssd-hab",
+  "scene_name": "rug",
+  "platform": "simulator",
+  "initial_pose": [1.48, 36.90, -1.5],
+  "dt": 0.01,
+  "goal": [4, 0.0],
+  "text_queries": ["stay away from the rug"],
+  "score_threshold": 0.1,
+  "results_path": "/home/zli133/shared/ml_projects/lang_reachability_ros/results/rtabmap_mppi_vlm_reachability",
+
+  "tf_map_frame": "map",
+  "tf_odom_frame": "odom",
+  "tf_base_link_frame": "base_link",
+  "tf_camera_link_frame": "camera_link"
+}

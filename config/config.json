@@ -1,5 +1,5 @@
 {
-  "data_root": "/home/leo/git/lang_reachability/data/",
-  "dataset_name": "hssd",
+  "data_root": "/home/zli133/shared/data/habitat",
+  "dataset_name": "hssd-hab",
   "scene_idx": 2
 }

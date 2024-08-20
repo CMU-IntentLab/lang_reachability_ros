@@ -1,0 +1,30 @@
+{
+  "exp_name": "rtabmap_mppi_vlm_reachability",
+  "data_root": "/home/zli133/shared/data/habitat",
+  "dataset_name": "hssd-hab",
+  "scene_name": "rug",
+  "platform": "simulator",
+
+  "initial_pose": [1.48, 36.90, -1.5],
+  "goal": [7, 0],
+
+  "vmin": 0.1,
+  "vmax": 5.0,
+  "wmax": 3.0,
+  "dt": 0.01,
+
+  "use_precomputed_brt": "True",
+  "brt_update_interval": 4,
+  "brt_convergence_epsilon": 0.001,
+  "brt_unsafe_level": 0.2,
+
+  "tf_map_frame": "map",
+  "tf_odom_frame": "odom",
+  "tf_base_link_frame": "base_link",
+  "tf_camera_link_frame": "camera_link",
+
+  "text_queries": ["stay away from the rug"],
+  "score_threshold": 0.3,
+
+  "results_path": "/home/zli133/shared/ml_projects/backups/lang_reachability_ros/results/rtabmap_mppi_vlm_reachability"
+}
