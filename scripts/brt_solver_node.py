@@ -1,8 +1,9 @@
 # !/usr/bin/env python
 import argparse
 import json
-
+import os
 import rospy
+import threading
 
 from geometry_msgs.msg import Twist, TwistStamped, PoseWithCovarianceStamped, PoseStamped, Pose
 from nav_msgs.msg import OccupancyGrid, Odometry
@@ -32,12 +33,16 @@ class BRTSolverNode:
         self.brt_computed = False
         self.values = None
 
+        self.use_precomputed_brt = self.exp_config['use_precomputed_brt'] == "True"
+        self.scene_name = self.exp_config['scene_name']
         self.vmin = self.exp_config["vmin"]
         self.vmax = self.exp_config["vmax"]
         self.wmax = self.exp_config["wmax"]
         self.brt_update_interval = self.exp_config["brt_update_interval"]
         self.epsilon = self.exp_config["brt_convergence_epsilon"]
         self.unsafe_level = self.exp_config["brt_unsafe_level"]
+
+        self.possible_brt_file = os.path.join(self.exp_config["results_path"], f"brt_{self.scene_name}.npy")
 
         self.tf_buffer = tf2_ros.Buffer()
         self.listener = tf2_ros.TransformListener(self.tf_buffer)
@@ -100,13 +105,25 @@ class BRTSolverNode:
         constraints_grid_map = self.merge_maps()
         constraints_grid_map = 1 - np.abs(constraints_grid_map)     # make -1 = occupied, 0 = occupied, 1 = free
 
-        start_time = rospy.Time.now().secs
-        self.values = self.reachability_solver.solve(constraints_grid_map, epsilon=self.epsilon)
-        end_time = rospy.Time.now().secs
-        time_taken = end_time - start_time
-        msg = Float32()
-        msg.data = time_taken
-        self.brt_computation_time_pub.publish(msg)
+        need_computation = True
+        if not self.brt_computed and self.use_precomputed_brt:
+            try:
+                print("Trying to use precomputed brt...++++++++++++++++++++++++++++++++")
+                self.values = np.load(self.possible_brt_file)
+                print("Precomputed brt loaded")
+                need_computation = False
+                end_time = rospy.Time.now().secs
+            except:
+                print("failed to load precomputed brt..., move on to compute it")
+
+        if need_computation:
+            start_time = rospy.Time.now().secs
+            self.values = self.reachability_solver.solve(constraints_grid_map, epsilon=self.epsilon)
+            end_time = rospy.Time.now().secs
+            time_taken = end_time - start_time
+            msg = Float32()
+            msg.data = time_taken
+            self.brt_computation_time_pub.publish(msg)
 
         self.brt_computed = True
         self.last_updated = end_time
@@ -162,12 +179,15 @@ class BRTSolverNode:
         size_x = self.grid_map.shape[1] * self.map_resolution
         domain_low = self.map_origin
         domain_high = domain_low + np.array([size_x, size_y])
-        converged_values = np.load("/home/leo/riss_ws/src/lang_reachability_ros/lab_value_function.npy")
+        if self.use_precomputed_brt:
+            brt_file = self.possible_brt_file
+        else:
+            brt_file = ""
         self.reachability_solver = reachability.ReachabilitySolver(system="unicycle3d", 
                                                                     domain=[[domain_low[1], domain_low[0]],[domain_high[1], domain_high[0]]],
                                                                     unsafe_level=self.unsafe_level,
                                                                     vmin=self.vmin, vmax=self.vmax, wmax=self.wmax,
-                                                                    converged_values=None,
+                                                                    possible_brt_file=brt_file,
                                                                     mode="brt", accuracy="low")
 
     def _construct_occupancy_grid_msg(self, map_data: np.array):
@@ -183,7 +203,10 @@ class BRTSolverNode:
         return msg
     
     def _publish_brt_viz(self):
-        if self.brt_computed:
+        print(self.brt_computed)
+        print(self.robot_pose)
+        if self.brt_computed and self.robot_pose is not None:
+            print("publishing visualzation+++++++++")
             msg = OccupancyGrid()
             msg.header.frame_id = 'map'
             msg.info.origin.position.x = self.map_origin[0]
@@ -220,11 +243,19 @@ if __name__ == '__main__':
     # enforce first BRT computation
     while not solver_node.brt_computed and not rospy.is_shutdown():
         solver_node.compute_brt()
-
-    rate = rospy.Rate(10)
-    while not rospy.is_shutdown():
-        if rospy.Time.now().secs - solver_node.last_updated >= solver_node.brt_update_interval:
-            solver_node.compute_brt()
         solver_node.publish_brt()
         solver_node._publish_brt_viz()
+
+
+    def compute_brt_thread(solver_node):
+        while not rospy.is_shutdown():
+            if rospy.Time.now().secs - solver_node.last_updated >= solver_node.brt_update_interval:
+                solver_node.compute_brt()
+
+    rate = rospy.Rate(10)
+    computation_thread = threading.Thread(target=compute_brt_thread, args=(solver_node,))
+    computation_thread.start()
+    while not rospy.is_shutdown():
+        solver_node._publish_brt_viz()
+        solver_node.publish_brt()
         rate.sleep()

@@ -1,7 +1,7 @@
 # !/usr/bin/env python
 import argparse
 import json
-
+import os
 import rospy
 
 from geometry_msgs.msg import Twist, TwistStamped, PoseWithCovarianceStamped, PoseStamped, Pose
@@ -56,7 +56,7 @@ class SafeControllerNode:
         self.failure_pub = rospy.Publisher(self.topics_names["failure_set_at_state"], PoseStamped, queue_size=10)
         self.safe_planning_time_pub = rospy.Publisher(self.topics_names["safe_planning_time"], Float32, queue_size=10)
         self.brt_computation_time_pub = rospy.Publisher(self.topics_names["brt_computation_time"], Float32, queue_size=10)
-        self.brt_viz_pub = rospy.Publisher('brt_viz', OccupancyGrid, queue_size=10)
+        # self.brt_viz_pub = rospy.Publisher('brt_viz', OccupancyGrid, queue_size=10)
 
     def make_exp_config(self):
         self.exp_path = self.args.exp_path
@@ -107,7 +107,7 @@ class SafeControllerNode:
             failure_msg = self._construct_pose_stamped_msg([self.robot_pose[0], self.robot_pose[1], initial_value], [0.0, 0.0, self.robot_pose[2]])
             self.failure_pub.publish(failure_msg)
         else:
-            rospy.loginfo("Returning nominal action")
+            rospy.loginfo("BRT is not computed yet, robot not started")
             nominal_action = np.array([0, 0])
             nominal_action_msg = self._construct_twist_msg(nominal_action)
             self.safe_action_pub.publish(nominal_action_msg)
@@ -158,12 +158,12 @@ class SafeControllerNode:
         size_x = self.grid_map.shape[1] * self.map_resolution
         domain_low = self.map_origin
         domain_high = domain_low + np.array([size_x, size_y])
-        converged_values = np.load("/home/leo/riss_ws/src/lang_reachability_ros/lab_value_function.npy")
+        possible_brt_file = os.path.join(self.exp_config["results_path"], f"brt_{self.exp_config['scene_name']}.npy")
         self.reachability_solver = reachability.ReachabilitySolver(system="unicycle3d", 
                                                                     domain=[[domain_low[1], domain_low[0]],[domain_high[1], domain_high[0]]],
                                                                     unsafe_level=self.unsafe_level,
                                                                     vmin=self.vmin, vmax=self.vmax, wmax=self.wmax,
-                                                                    converged_values=None,
+                                                                    possible_brt_file=possible_brt_file,
                                                                     mode="brt", accuracy="low")
 
     def _construct_occupancy_grid_msg(self, map_data: np.array):
@@ -207,6 +207,7 @@ class SafeControllerNode:
         msg.header.stamp = rospy.Time.now()
         msg.pose.position.x = pos[0]
         msg.pose.position.y = pos[1]
+        print(f"{pos[2]}++++++++++++++++++++++")
         msg.pose.position.z = pos[2]
         
         msg.pose.orientation.x = quat[0]
@@ -215,25 +216,25 @@ class SafeControllerNode:
         msg.pose.orientation.w = quat[3]
         return msg
     
-    def _publish_brt_viz(self):
-        if self.brt_computed:
-            msg = OccupancyGrid()
-            msg.header.frame_id = 'map'
-            msg.info.origin.position.x = self.map_origin[0]
-            msg.info.origin.position.y = self.map_origin[1]
-            msg.info.origin.orientation.w = 1
-            msg.info.height = np.shape(self.grid_map)[0]
-            msg.info.width = np.shape(self.grid_map)[1]
-            msg.info.resolution = self.map_resolution
-            ori = np.pi/2 - self.robot_pose[2]
-            ori_idx = int(ori/(2*np.pi)*np.shape(self.values)[2])
-            data = self.values[:, :, ori_idx]
-            data = data.flatten()
-            data[data < 0] = 0
-            data[data > 0] = 100
-            data = 100 - data
-            msg.data = tuple(data.astype(int))
-            self.brt_viz_pub.publish(msg)
+    # def _publish_brt_viz(self):
+    #     if self.brt_computed:
+    #         msg = OccupancyGrid()
+    #         msg.header.frame_id = 'map'
+    #         msg.info.origin.position.x = self.map_origin[0]
+    #         msg.info.origin.position.y = self.map_origin[1]
+    #         msg.info.origin.orientation.w = 1
+    #         msg.info.height = np.shape(self.grid_map)[0]
+    #         msg.info.width = np.shape(self.grid_map)[1]
+    #         msg.info.resolution = self.map_resolution
+    #         ori = np.pi/2 - self.robot_pose[2]
+    #         ori_idx = int(ori/(2*np.pi)*np.shape(self.values)[2])
+    #         data = self.values[:, :, ori_idx]
+    #         data = data.flatten()
+    #         data[data < 0] = 0
+    #         data[data > 0] = 100
+    #         data = 100 - data
+    #         msg.data = tuple(data.astype(int))
+    #         self.brt_viz_pub.publish(msg)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Command Node")
