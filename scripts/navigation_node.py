@@ -33,6 +33,8 @@ class NavigationNode:
         self._device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         self._dtype = torch.float32
         self._navigator = navigator.Navigator(config=self.exp_config, planner_type="mppi", device=self._device, dtype=self._dtype, dt=0.1)
+        # self._navigator = navigator.Navigator(planner_type="mppi", device=self._device,
+        #                                       dtype=self._dtype, dt=0.1)
         self.navigator_ready = False
 
         self._odom = None
@@ -57,7 +59,7 @@ class NavigationNode:
         # self.odom_sub = rospy.Subscriber(self.topics_names["odom"], Odometry, callback=self.odom_callback)
         self.pose_sub = rospy.Subscriber(self.topics_names["pose"], PoseWithCovarianceStamped, callback=self.pose_callback)
         self.goal_sub = rospy.Subscriber(self.topics_names["goal"], PoseStamped, callback=self.goal_callback)
-        self.map_sub = rospy.Subscriber(self.topics_names["grid_map"], OccupancyGrid, callback=self.map_callback)
+        self.map_sub = rospy.Subscriber(self.topics_names["constraints_grid_map"], OccupancyGrid, callback=self.map_callback)
 
     def _check_navigator_ready(self):
         if self._odom is not None and self._goal is not None and self._map is not None:
