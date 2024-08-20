@@ -19,7 +19,7 @@ from sensor_msgs.msg import CameraInfo, Image
 from nav_msgs.msg import Odometry, OccupancyGrid
 
 class SimulatorNode:
-    def __init__(self, args, dataset_name, test_scene, test_scene_name, dt=0.01, init_x=0.0, init_y=0.0, init_theta=0.0) -> None:
+    def __init__(self, args) -> None:
         self.args = args
         self.exp_config = self.make_exp_config()
         self.topics_names = self.make_topics_names()
@@ -28,15 +28,21 @@ class SimulatorNode:
         self.tf_odom_frame = self.exp_config["tf_odom_frame"]
         self.tf_base_link_frame = self.exp_config["tf_base_link_frame"]
         self.tf_camera_link_frame = self.exp_config["tf_camera_link_frame"]
-    
-        self.sim = sim.Simulator(dataset_name=dataset_name, test_scene=test_scene, test_scene_name=test_scene_name,
-                                 initial_state=[init_x, init_y, init_theta], dt=dt)
+
+        self.data_root = self.exp_config['data_root']
+        self.dataset_name = self.exp_config['dataset_name']
+        self.scene_name = self.exp_config['scene_name']
+        self.scene_path = self.make_scene_path()
+        self.init_x = self.exp_config['initial_pose'][0]
+        self.init_y = self.exp_config['initial_pose'][1]
+        self.init_theta = self.exp_config['initial_pose'][2]
+        self.sim = sim.Simulator(dataset_name=self.dataset_name, test_scene=self.scene_path,
+                                 test_scene_name=self.scene_name,
+                                 initial_state=[self.init_x, self.init_y, self.init_theta], dt=self.exp_config['dt'])
+
         # self.robot = systems.Unicycle3D(dt=dt)
         self.bridge = cv_bridge.CvBridge()
 
-        self.init_x = init_x
-        self.init_y = init_y
-        self.init_theta = init_theta
         self.robot_pose_pub = rospy.Publisher("gt_pose", Pose, queue_size=10)
         self.odom_pub = rospy.Publisher(self.topics_names["odom"], Odometry, queue_size=10)
         self.robot_view_rgb_pub = rospy.Publisher(self.topics_names["rgb_image"], Image, queue_size=10)
@@ -64,6 +70,17 @@ class SimulatorNode:
         with open(self.topics_path, 'r') as f:
             topics_names = json.load(f)
         return topics_names
+
+    def make_scene_path(self):
+        scene_path = None
+        if self.dataset_name == 'hssd':
+            scene_path = os.path.join(self.data_root, "hssd", f"{self.scene_name}.glb")
+        elif self.dataset_name == 'hssd-hab':
+            scene_path = self.scene_name
+        elif self.dataset_name == 'hm3d':
+            sub_title = self.scene_name.split('-')[-1]
+            scene_path = os.path.join(self.data_root, "hm3d/train", f"{self.scene_name}/{sub_title}.basis.glb")
+        return scene_path
     
     def goal_callback(self, msg: PoseStamped):
         # print(f"goal received: x={msg.pose.position.x}")
@@ -302,30 +319,6 @@ class SimulatorNode:
         return logger
 
 
-def setup_data():
-    dir_path = str(Path(__file__).parent.parent)
-    with open(os.path.join(dir_path, 'config/config.json')) as path_config_file:
-        config = json.load(path_config_file)
-
-    data_root = config['data_root']
-    dataset_name = config['dataset_name']
-    scene_idx = config['scene_idx']
-    if dataset_name == 'hssd':
-        scene_map = {0: "102344469", 1: "102344022", 2: "102344094", 3: "103997403_171030405", 4: "102815859", 5:"102816216"}
-        test_scene_name = scene_map[scene_idx]
-        test_scene = os.path.join(data_root, "hssd", f"{test_scene_name}.glb")
-    elif dataset_name == 'hssd-hab':
-        scene_map = {0: "102344469", 1: "102344022", 2: "102344094", 3: "103997403_171030405", 4: "102815859",
-                    5: "102816216", 6: "102344094_raw", 7: "102344094_mod"}
-        test_scene_name = scene_map[scene_idx]
-        test_scene = test_scene_name
-    elif dataset_name == 'hm3d':
-        scene_map = {0: "00099-226REUyJh2K", 1: "00013-sfbj7jspYWj", 2: "00198-eZrc5fLTCmi"}
-        test_scene_name = scene_map[scene_idx]
-        sub_title = test_scene_name.split('-')[-1]
-        test_scene = os.path.join(data_root, "hm3d/train", f"{test_scene_name}/{sub_title}.basis.glb")
-    return dataset_name, test_scene, test_scene_name
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Command Node")
@@ -339,8 +332,7 @@ if __name__ == '__main__':
     rospy.init_node("simulator")
     rate = rospy.Rate(10)
 
-    dataset_name, test_scene, test_scene_name = setup_data()
-    sim_node = SimulatorNode(args=args, dataset_name=dataset_name, test_scene=test_scene, test_scene_name=test_scene_name, init_x=0.5, init_y=3.5, init_theta=1.5)
+    sim_node = SimulatorNode(args=args)
 
     while not rospy.is_shutdown():
         sim_node.update_sim()
