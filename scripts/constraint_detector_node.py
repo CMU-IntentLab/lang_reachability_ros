@@ -115,7 +115,7 @@ class ConstraintDetectorNode:
         T_inv = self.get_inv_camera_extrinsics_matrix()
         # print(f"T_inv={T_inv}")
         for bbox, label in detections:
-            x_occ, y_occ = self.object_detector.estimate_object_position(self.depth_img, bbox, K_inv, T_inv, threshold=4)
+            x_occ, y_occ = self.object_detector.estimate_object_position(self.depth_img, bbox, K_inv, T_inv, threshold=2)
             row, col = self.__position_to_cell(x_occ, y_occ)
             try:
                 self.semantic_grid_map[row, col] = 100
