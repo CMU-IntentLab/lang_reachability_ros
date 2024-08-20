@@ -100,11 +100,12 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     exp_name = args.exp
-    exp_configs_path = os.path.join(dir_path, 'config', 'hardware_exps', exp_name, f"{exp_name}.json")
+    exp_configs_path = os.path.join(dir_path, 'config', 'simulation_exps', exp_name, f"{exp_name}.json")
     with open(exp_configs_path, 'r') as f:
         exp_configs = json.load(f)
 
-    topics_names_path = os.path.join(dir_path, 'config', 'hardware_exps', exp_name, "topics_names.json")
+    topics_names_path = os.path.join(dir_path, 'config', 'simulation_exps', exp_name, "topics_names.json")
+
 
     module_name_list = exp_configs['exp_name'].split('_')
     module_name_list = ["command_node", "metrics_recorder_node"] + module_name_list
@@ -114,6 +115,8 @@ if __name__ == '__main__':
     platform = exp_configs["platform"]  # either simulator or hardware
     if platform == 'simulator':
         module_name_list = module_name_list + [platform]
+        if exp_name == "mapping":
+            module_name_list = ["simulator"]
 
     node_list = start_modules(module_name_list, exp_configs_path, topics_names_path)
 
