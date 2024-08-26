@@ -3,19 +3,21 @@
     "odom": "/odom",
     "pose": "/rtabmap/localization_pose",
     "sim_global_pose": "/global_pose",
-
     "rgb_image": "/rgb/image",
     "depth_image": "/depth/image",
     "camera_info": "/rgb/camera_info",
-
     "language_constraint": "/language_constraint",
     "vlm_detections": "/vlm_detections",
     "vlm_inference_time": "/vlm_inference_time",
-
     "goal": "/goal",
     "nominal_action": "/nominal_cmd_vel",
     "safe_action": "/cmd_vel",
+    "controller_indicator": "/controller_indicator",
+
     "trajectory_visualization": "/vis_trajectories",
+    "viz_vlm_map": "/viz_vlm_map",
+    "viz_brt": "/viz_brt",
+    "viz_brt_colored": "/viz_brt_colored",
 
     "brt": "/brt",
 
