@@ -14,6 +14,7 @@ import tf.transformations as tft
 import numpy as np
 
 from lang_reachability import reachability
+from visualization_msgs.msg import Marker
 
 
 class SafeControllerNode:
@@ -55,7 +56,8 @@ class SafeControllerNode:
         self.value_function_pub = rospy.Publisher(self.topics_names["value_function_at_state"], PoseStamped, queue_size=10)
         self.failure_pub = rospy.Publisher(self.topics_names["failure_set_at_state"], PoseStamped, queue_size=10)
         self.safe_planning_time_pub = rospy.Publisher(self.topics_names["safe_planning_time"], Float32, queue_size=10)
-        self.brt_computation_time_pub = rospy.Publisher(self.topics_names["brt_computation_time"], Float32, queue_size=10)
+        self.controller_indicator_pub = rospy.Publisher(self.topics_names['controller_indicator'], Marker, queue_size=10)
+        # self.brt_computation_time_pub = rospy.Publisher(self.topics_names["brt_computation_time"], Float32, queue_size=10)
         # self.brt_viz_pub = rospy.Publisher('brt_viz', OccupancyGrid, queue_size=10)
 
     def make_exp_config(self):
@@ -97,7 +99,8 @@ class SafeControllerNode:
         if self.brt_computed and self.reachability_solver is not None:
             rospy.loginfo("Returning safe action")
             nominal_action = np.array([msg.linear.x, msg.angular.z])
-            safe_action, value, initial_value = self.compute_safe_control(nominal_action)
+            safe_action, value, initial_value, intervened = self.compute_safe_control(nominal_action)
+            self.publish_controller_indicator(intervened)
             safe_action_msg = self._construct_twist_msg(safe_action)
             self.safe_action_pub.publish(safe_action_msg)
             safe_action_viz_msg = self._construct_twist_stamped_msg(safe_action)
@@ -120,6 +123,37 @@ class SafeControllerNode:
         if self.reachability_solver is None:
             self._init_reachability_solver()
 
+    def publish_controller_indicator(self, safe_intervene):
+        marker = Marker()
+        marker.header.frame_id = self.exp_config["tf_map_frame"]
+        marker.header.stamp = rospy.Time.now()
+        marker.ns = "controller_status"
+        marker.id = 0
+        marker.type = Marker.TEXT_VIEW_FACING
+        marker.action = Marker.ADD
+        marker.pose.position.x = 0
+        marker.pose.position.y = 0
+        marker.pose.position.z = 1.0
+        marker.pose.orientation.x = 0.0
+        marker.pose.orientation.y = 0.0
+        marker.pose.orientation.z = 0.0
+        marker.pose.orientation.w = 1.0
+        marker.scale.z = 0.5
+
+        if not safe_intervene:
+            marker.text = "Nominal Planner Active"
+            marker.color.r = 0.0
+            marker.color.g = 1.0
+            marker.color.b = 0.0
+        else:
+            marker.text = "Safe Controller Active"
+            marker.color.r = 1.0
+            marker.color.g = 0.0
+            marker.color.b = 0.0
+
+        marker.color.a = 1.0  # Set marker visibility
+        self.controller_indicator_pub.publish(marker)
+
     def semantic_map_callback(self, msg: OccupancyGrid):
         self.semantic_grid_map = np.reshape(msg.data, (msg.info.height, msg.info.width))
         constraints_map = self.merge_maps()
@@ -131,11 +165,11 @@ class SafeControllerNode:
             rospy.logwarn("Robot pose was not received. Cannot compute safe action.")
             return nominal_action
         
-        start_time = rospy.Time.now().secs
-        safe_action, value, initial_values = self.reachability_solver.compute_safe_control(self.robot_pose, nominal_action, self.values, self.values_grad)
-        time_taken = rospy.Time.now().secs - start_time
+        start_time = rospy.Time.now()
+        safe_action, value, initial_values, intervened = self.reachability_solver.compute_safe_control(self.robot_pose, nominal_action, self.values, self.values_grad)
+        time_taken = (rospy.Time.now() - start_time).to_sec()
         self.safe_planning_time_pub.publish(Float32(data=time_taken))
-        return safe_action, value, initial_values
+        return safe_action, value, initial_values, intervened
     
     def merge_maps(self):
         """
@@ -207,7 +241,7 @@ class SafeControllerNode:
         msg.header.stamp = rospy.Time.now()
         msg.pose.position.x = pos[0]
         msg.pose.position.y = pos[1]
-        print(f"{pos[2]}++++++++++++++++++++++")
+        # print(f"{pos[2]}++++++++++++++++++++++")
         msg.pose.position.z = pos[2]
         
         msg.pose.orientation.x = quat[0]

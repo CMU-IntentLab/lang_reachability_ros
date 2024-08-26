@@ -13,10 +13,10 @@ class VisualizationNode:
         # define subscribers
         self.vlm_map_sub = rospy.Subscriber(self.topics_names["semantic_grid_map"], OccupancyGrid, self.vlm_map_callback)
         self.brt_map = rospy.Subscriber(self.topics_names["viz_brt"], OccupancyGrid, self.brt_map_callback)
-        self.floorplan = rospy.Subscriber(self.topics_names["grid_map"], OccupancyGrid, self.floorplan_callback)
+        # self.floorplan = rospy.Subscriber(self.topics_names["grid_map"], OccupancyGrid, self.floorplan_callback)
         # define publishers
         self.vlm_map_viz_pub = rospy.Publisher(self.topics_names["viz_vlm_map"], OccupancyGrid, queue_size=1)
-        self.brt_map_viz_pub = rospy.Publisher(self.topics_names["viz_brt"], OccupancyGrid, queue_size=1)
+        self.brt_map_viz_pub = rospy.Publisher(self.topics_names["viz_brt_colored"], OccupancyGrid, queue_size=1)
 
     def make_exp_config(self):
         self.exp_path = self.args.exp_path
@@ -32,11 +32,15 @@ class VisualizationNode:
 
     def vlm_map_callback(self, msg: OccupancyGrid):
         # recolor the map
-        msg.data[msg.data == 100] = 1
+        data = list(msg.data)
+        data = [1 if value == 100 else value for value in data]
+        msg.data = tuple(data)
         self.vlm_map_viz_pub.publish(msg)
 
     def brt_map_callback(self, msg: OccupancyGrid):
-        msg.data[msg.data == 100] = 90
+        data = list(msg.data)
+        data = [90 if value == 100 else value for value in data]
+        msg.data = tuple(data)
         self.brt_map_viz_pub.publish(msg)
 
 if __name__ == '__main__':

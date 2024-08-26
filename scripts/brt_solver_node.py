@@ -4,6 +4,7 @@ import json
 import os
 import rospy
 import threading
+import time
 
 from geometry_msgs.msg import Twist, TwistStamped, PoseWithCovarianceStamped, PoseStamped, Pose
 from nav_msgs.msg import OccupancyGrid, Odometry
@@ -57,7 +58,7 @@ class BRTSolverNode:
         self.value_function_pub = rospy.Publisher(self.topics_names["value_function_at_state"], PoseStamped, queue_size=10)
         self.failure_pub = rospy.Publisher(self.topics_names["failure_set_at_state"], PoseStamped, queue_size=10)
         self.brt_computation_time_pub = rospy.Publisher(self.topics_names["brt_computation_time"], Float32, queue_size=10)
-        self.brt_viz_pub = rospy.Publisher('brt_viz', OccupancyGrid, queue_size=10)
+        self.brt_viz_pub = rospy.Publisher(self.topics_names["viz_brt"], OccupancyGrid, queue_size=10)
 
     def make_exp_config(self):
         self.exp_path = self.args.exp_path
@@ -108,25 +109,28 @@ class BRTSolverNode:
         need_computation = True
         if not self.brt_computed and self.use_precomputed_brt:
             try:
-                print("Trying to use precomputed brt...++++++++++++++++++++++++++++++++")
+                print("Trying to use precomputed brt...")
                 self.values = np.load(self.possible_brt_file)
                 print("Precomputed brt loaded")
                 need_computation = False
-                end_time = rospy.Time.now().secs
+                end_time = rospy.Time.now()
             except:
                 print("failed to load precomputed brt..., move on to compute it")
 
         if need_computation:
-            start_time = rospy.Time.now().secs
+            start_time = rospy.Time.now()
             self.values = self.reachability_solver.solve(constraints_grid_map, epsilon=self.epsilon)
-            end_time = rospy.Time.now().secs
-            time_taken = end_time - start_time
+            end_time = rospy.Time.now()
+            time_taken = (end_time - start_time).to_sec()
             msg = Float32()
             msg.data = time_taken
             self.brt_computation_time_pub.publish(msg)
+            if not self.brt_computed:
+                print(f"save newly floorplan's brt to {self.possible_brt_file}")
+                np.save(self.possible_brt_file, self.values)
 
         self.brt_computed = True
-        self.last_updated = end_time
+        self.last_updated = time.time()
     
     def publish_brt(self):
         if self.values is not None:
@@ -182,7 +186,7 @@ class BRTSolverNode:
         if self.use_precomputed_brt:
             brt_file = self.possible_brt_file
         else:
-            brt_file = ""
+            brt_file = None
         self.reachability_solver = reachability.ReachabilitySolver(system="unicycle3d", 
                                                                     domain=[[domain_low[1], domain_low[0]],[domain_high[1], domain_high[0]]],
                                                                     unsafe_level=self.unsafe_level,
@@ -203,10 +207,8 @@ class BRTSolverNode:
         return msg
     
     def _publish_brt_viz(self):
-        print(self.brt_computed)
-        print(self.robot_pose)
         if self.brt_computed and self.robot_pose is not None:
-            print("publishing visualzation+++++++++")
+            print("publishing visualzation")
             msg = OccupancyGrid()
             msg.header.frame_id = 'map'
             msg.info.origin.position.x = self.map_origin[0]
@@ -249,8 +251,13 @@ if __name__ == '__main__':
 
     def compute_brt_thread(solver_node):
         while not rospy.is_shutdown():
-            if rospy.Time.now().secs - solver_node.last_updated >= solver_node.brt_update_interval:
-                solver_node.compute_brt()
+            print(f'brt threading in progress')
+            # time_interval = rospy.Time.now().secs - solver_node.last_updated.to_sec()
+            time_interval = time.time() - solver_node.last_updated
+            print(f'time since last brt: {time_interval}')
+            # if time_interval >= 0.1:
+            print(f"brt updating")
+            solver_node.compute_brt()
 
     rate = rospy.Rate(10)
     computation_thread = threading.Thread(target=compute_brt_thread, args=(solver_node,))

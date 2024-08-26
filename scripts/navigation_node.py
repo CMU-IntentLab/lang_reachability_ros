@@ -86,7 +86,7 @@ class NavigationNode:
             self._check_navigator_ready()  
 
     def map_callback(self, msg: OccupancyGrid) -> None:
-        print('map callback')
+        # print('map callback')
         self._map = msg
         map_data = msg.data
         map_dim = [msg.info.height, msg.info.width]
@@ -115,10 +115,10 @@ class NavigationNode:
             return False
 
     def publish_command(self):
-        start_time = rospy.Time.now().secs
+        start_time = rospy.Time.now()
         v, w = self._navigator.get_command()
 
-        time_taken = rospy.Time.now().secs - start_time
+        time_taken = (rospy.Time.now() - start_time).to_sec()
         self.planning_time_pub.publish(Float32(data=time_taken))
         # print(v, w)
 
@@ -171,7 +171,7 @@ if __name__ == '__main__':
     rospy.init_node('navigation_node')
     rate = rospy.Rate(10)
 
-    parser = argparse.ArgumentParser(description="Command Node")
+    parser = argparse.ArgumentParser(description="Navigator Node")
     parser.add_argument('--exp_path', type=str, default=None, help='path to experiment json file')
     parser.add_argument('--topics_path', type=str, default=None, help='path to ROS topics names json file')
     args = parser.parse_args()

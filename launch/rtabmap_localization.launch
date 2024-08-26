@@ -1,5 +1,5 @@
 <launch>
-   <arg name="database_path" default="/home/zli133/shared/ml_projects/backups/lang_reachability_ros/config/maps/rtabmap_rug.db"/>
+   <arg name="database_path" default="/home/zli133/shared/ml_projects/lang_reachability_ros/maps/rtabmap_rug_1.db"/>
    
    <group ns="rtabmap">
       <node name="rtabmap" pkg="rtabmap_slam" type="rtabmap" output="screen">
@@ -19,7 +19,7 @@
 
          <param name="queue_size" type="int" value="10"/>
 
-         <param name="RGBD/StartAtOrigin" type="bool" value="true"/>
+         <param name="RGBD/StartAtOrigin" type="bool" value="false"/>
          <param name="Mem/IncrementalMemory" type="string" value="false"/>
          <param name="Rtabmap/DetectionRate" type="string" value="10" />
       </node>

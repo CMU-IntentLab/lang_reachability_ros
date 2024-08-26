@@ -74,7 +74,8 @@ def start_modules(module_name_list, exp_config_path, topics_names_path):
                       "reachability_solver": "brt_solver_node",
                       "simulator": "simulator_node",
                       "command_node": "command_node",
-                      "metrics_recorder_node": "metrics_recorder_node"}
+                      "metrics_recorder_node": "metrics_recorder_node",
+                      "visualization_node": "visualization_node"}
 
     for module in module_name_list:
         if module == "rtabmap":
@@ -108,7 +109,7 @@ if __name__ == '__main__':
 
 
     module_name_list = exp_configs['exp_name'].split('_')
-    module_name_list = ["command_node", "metrics_recorder_node"] + module_name_list
+    module_name_list = ["command_node", "metrics_recorder_node", "visualization_node"] + module_name_list
     if "reachability" in module_name_list:
         module_name_list += ["reachability_solver"]
 
