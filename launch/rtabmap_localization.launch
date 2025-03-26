@@ -1,5 +1,5 @@
 <launch>
-   <arg name="database_path" default="/home/zli133/shared/ml_projects/lang_reachability_ros/maps/rtabmap_102344094.db" />
+   <arg name="database_path" default="/home/leo/.ros/scene5.db"/>
    
    <group ns="rtabmap">
       <node name="rtabmap" pkg="rtabmap_slam" type="rtabmap" output="screen">
@@ -22,6 +22,7 @@
          <param name="RGBD/StartAtOrigin" type="bool" value="true"/>
          <param name="Mem/IncrementalMemory" type="string" value="false"/>
          <param name="Rtabmap/DetectionRate" type="string" value="10" />
+         <param name="Vis/MinInliers"  type="int"  value="30" />
       </node>
    </group>
 </launch>

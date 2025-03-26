@@ -37,7 +37,7 @@ class BRTSolverNode:
         self.wmax = self.exp_config["wmax"]
         self.brt_update_interval = self.exp_config["brt_update_interval"]
         self.epsilon = self.exp_config["brt_convergence_epsilon"]
-        self.unsafe_level = self.exp_config["brt_unsafe_level"]
+        self.brt_unsafe_level = self.exp_config["brt_unsafe_level"]
 
         self.tf_buffer = tf2_ros.Buffer()
         self.listener = tf2_ros.TransformListener(self.tf_buffer)
@@ -47,7 +47,7 @@ class BRTSolverNode:
         self.floorplan_sub = rospy.Subscriber(self.topics_names["grid_map"], OccupancyGrid, callback=self.floorplan_callback)
         self.semantic_map_sub = rospy.Subscriber(self.topics_names["semantic_grid_map"], OccupancyGrid, callback=self.semantic_map_callback)
 
-        self.brt_pub = rospy.Publisher(self.topics_names["brt"], Float32MultiArray, queue_size=10)
+        self.brt_pub = rospy.Publisher(self.topics_names["brt"], Float32MultiArray, queue_size=1)
         self.constraints_map_pub = rospy.Publisher(self.topics_names["constraints_grid_map"], OccupancyGrid, queue_size=10)
         self.value_function_pub = rospy.Publisher(self.topics_names["value_function_at_state"], PoseStamped, queue_size=10)
         self.failure_pub = rospy.Publisher(self.topics_names["failure_set_at_state"], PoseStamped, queue_size=10)
@@ -98,16 +98,22 @@ class BRTSolverNode:
             return
 
         constraints_grid_map = self.merge_maps()
+        # constraints_grid_map = self.grid_map
         constraints_grid_map = 1 - np.abs(constraints_grid_map)     # make -1 = occupied, 0 = occupied, 1 = free
 
-        start_time = rospy.Time.now().secs
-        self.values = self.reachability_solver.solve(constraints_grid_map, epsilon=self.epsilon)
-        end_time = rospy.Time.now().secs
+        start_time = rospy.Time.now().to_sec()
+        if not self.brt_computed:
+            self.values = self.reachability_solver.solve(constraints_grid_map, epsilon=0.0001)
+        else:
+            self.values = self.reachability_solver.solve(constraints_grid_map, epsilon=self.epsilon)
+        end_time = rospy.Time.now().to_sec()
         time_taken = end_time - start_time
         msg = Float32()
         msg.data = time_taken
         self.brt_computation_time_pub.publish(msg)
 
+        self.publish_brt()
+        
         self.brt_computed = True
         self.last_updated = end_time
     
@@ -165,7 +171,7 @@ class BRTSolverNode:
         converged_values = np.load("/home/leo/riss_ws/src/lang_reachability_ros/lab_value_function.npy")
         self.reachability_solver = reachability.ReachabilitySolver(system="unicycle3d", 
                                                                     domain=[[domain_low[1], domain_low[0]],[domain_high[1], domain_high[0]]],
-                                                                    unsafe_level=self.unsafe_level,
+                                                                    unsafe_level=self.brt_unsafe_level,
                                                                     vmin=self.vmin, vmax=self.vmax, wmax=self.wmax,
                                                                     converged_values=None,
                                                                     mode="brt", accuracy="low")
@@ -196,8 +202,8 @@ class BRTSolverNode:
             ori_idx = int(ori/(2*np.pi)*np.shape(self.values)[2])
             data = self.values[:, :, ori_idx]
             data = data.flatten()
-            data[data < 0] = 0
-            data[data > 0] = 100
+            data[data < self.brt_unsafe_level] = 0
+            data[data > self.brt_unsafe_level] = 100
             data = 100 - data
             msg.data = tuple(data.astype(int))
             self.brt_viz_pub.publish(msg)
@@ -223,8 +229,8 @@ if __name__ == '__main__':
 
     rate = rospy.Rate(10)
     while not rospy.is_shutdown():
-        if rospy.Time.now().secs - solver_node.last_updated >= solver_node.brt_update_interval:
-            solver_node.compute_brt()
         solver_node.publish_brt()
         solver_node._publish_brt_viz()
+        if rospy.Time.now().to_sec() - solver_node.last_updated >= solver_node.brt_update_interval:
+            solver_node.compute_brt()
         rate.sleep()

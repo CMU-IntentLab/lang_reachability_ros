@@ -6,7 +6,7 @@
   "vmin": 0.1,
   "vmax": 1.0,
   "wmax": 1.0,
-  "goal": [2, 6],
+  "goal": [3, 1],
 
   "tf_map_frame": "map",
   "tf_odom_frame": "odom",

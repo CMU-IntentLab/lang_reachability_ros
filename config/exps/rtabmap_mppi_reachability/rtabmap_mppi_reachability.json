@@ -1,16 +1,20 @@
 {
   "exp_name": "rtabmap_mppi_reachability",
   "platform": "simulator",
-  "results_path": "/home/leo/riss_ws/src/lang_reachability_ros/experiments/hardware/scenario1",
-
+  "results_path": "/home/leo/riss_ws/src/lang_reachability_ros/experiments/sim/scenario5",
+  
   "vmin": 0.1,
   "vmax": 1.0,
   "wmax": 1.0,
-  "goal": [3.5, -5],  
-  
+  "goal": [2.0, -2.5],
+
+  "text_queries": ["avoid the free weights area"],
+  "score_threshold": 0.25,
+  "distance_threshold": 1.0,
+
   "brt_update_interval": 4,
   "brt_convergence_epsilon": 0.001,
-  "brt_unsafe_level": 0.2,
+  "brt_unsafe_level": 0.1,
 
   "tf_map_frame": "map",
   "tf_odom_frame": "odom",

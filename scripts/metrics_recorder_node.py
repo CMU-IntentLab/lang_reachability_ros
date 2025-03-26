@@ -33,7 +33,7 @@ class MetricsRecorderNode:
         self.save_path = os.path.join(self.save_path, now)
         os.makedirs(self.save_path)
 
-        self.start_time = rospy.Time.now().secs
+        self.start_time = rospy.Time.now().to_sec()
         self.trajectory = []
         self.value_function_at_state = []
         self.failure_at_state = []
@@ -84,7 +84,7 @@ class MetricsRecorderNode:
 
 
     def robot_state_callback(self, msg: PoseWithCovarianceStamped):
-        time = self.get_time_since_start()
+        time = msg.header.stamp.to_sec()
         pos = msg.pose.pose.position
         quat = msg.pose.pose.orientation
         euler = tft.euler_from_quaternion([quat.x, quat.y, quat.z, quat.w])
@@ -92,12 +92,12 @@ class MetricsRecorderNode:
         self.trajectory.append(pose)
 
     def value_function_callback(self, msg: PoseStamped):
-        time = self.get_time_since_start()
+        time = msg.header.stamp.to_sec()
         value = [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z, time]
         self.value_function_at_state.append(value)
     
     def failure_callback(self, msg: PoseStamped):
-        time = self.get_time_since_start()
+        time = msg.header.stamp.to_sec()
         value = [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z, time]
         self.failure_at_state.append(value)
 
@@ -188,7 +188,7 @@ class MetricsRecorderNode:
             json.dump(self.exp_config, file)
 
     def get_time_since_start(self):
-        return rospy.Time.now().secs - self.start_time
+        return rospy.Time.now().to_sec() - self.start_time
 
 
 
@@ -211,11 +211,11 @@ def signal_handler(signal, frame):
 
 signal.signal(signal.SIGTERM, signal_handler)
 
-last_print = rospy.Time.now().secs
+last_print = rospy.Time.now().to_sec()
 rate = rospy.Rate(10)
 while not rospy.is_shutdown():
     rate.sleep()
 
-    if rospy.Time.now().secs - last_print > 5:
-       last_print = rospy.Time.now().secs 
+    if rospy.Time.now().to_sec() - last_print > 5:
+       last_print = rospy.Time.now().to_sec() 
        print("I'm still alive and recording data!")

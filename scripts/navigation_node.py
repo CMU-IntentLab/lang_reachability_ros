@@ -57,7 +57,8 @@ class NavigationNode:
         # self.odom_sub = rospy.Subscriber(self.topics_names["odom"], Odometry, callback=self.odom_callback)
         self.pose_sub = rospy.Subscriber(self.topics_names["pose"], PoseWithCovarianceStamped, callback=self.pose_callback)
         self.goal_sub = rospy.Subscriber(self.topics_names["goal"], PoseStamped, callback=self.goal_callback)
-        self.map_sub = rospy.Subscriber(self.topics_names["grid_map"], OccupancyGrid, callback=self.map_callback)
+        # self.map_sub = rospy.Subscriber(self.topics_names["grid_map"], OccupancyGrid, callback=self.map_callback)
+        self.map_sub = rospy.Subscriber(self.topics_names["constraints_grid_map"], OccupancyGrid, callback=self.map_callback)
 
     def _check_navigator_ready(self):
         if self._odom is not None and self._goal is not None and self._map is not None:
@@ -84,7 +85,7 @@ class NavigationNode:
             self._check_navigator_ready()  
 
     def map_callback(self, msg: OccupancyGrid) -> None:
-        print('map callback')
+        # print('map callback')
         self._map = msg
         map_data = msg.data
         map_dim = [msg.info.height, msg.info.width]
@@ -93,7 +94,7 @@ class NavigationNode:
         self._navigator.set_map(map_data=map_data, map_dim=map_dim, map_origin=map_origin, map_resolution=map_resolution)
         if not self.navigator_ready:
             self._check_navigator_ready()
-
+    
     def goal_callback(self, msg: PoseStamped) -> None:
         self._goal = msg
         position = [msg.pose.position.x, msg.pose.position.y]
@@ -113,10 +114,10 @@ class NavigationNode:
             return False
 
     def publish_command(self):
-        start_time = rospy.Time.now()
+        start_time = rospy.Time.now().to_sec()
         v, w = self._navigator.get_command()
 
-        time_taken = (rospy.Time.now() - start_time).to_sec()
+        time_taken = rospy.Time.now().to_sec() - start_time
         self.planning_time_pub.publish(Float32(data=time_taken))
         # print(v, w)
 

@@ -18,7 +18,7 @@ class CommandNode:
         self.topics_names = self.make_topics_names()
         self.goal_pub = rospy.Publisher(self.topics_names["goal"], PoseStamped, queue_size=1)
         self.goal = self.exp_config['goal']
-        print("command node initialized")
+        print(f"command node initialized with goal = x={self.goal[0]}, y={self.goal[1]}")
 
     def make_exp_config(self):
         self.exp_path = self.args.exp_path
@@ -45,7 +45,7 @@ class CommandNode:
         quat = tf.transformations.quaternion_from_euler(0, 0, theta)
         goal.pose.orientation = Quaternion(*quat)
         # self.logger.info(f"send goal: x={x}, y={y}, theta={theta}")
-        print(f"sending goal: x={self.goal[0]}, y={self.goal[1]}, theta={theta}")
+        # print(f"sending goal: x={self.goal[0]}, y={self.goal[1]}, theta={theta}")
         self.goal_pub.publish(goal)
         rospy.sleep(1)
         # self.logger.info('goal published')

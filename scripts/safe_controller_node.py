@@ -45,12 +45,12 @@ class SafeControllerNode:
         self.brt_sub = rospy.Subscriber(self.topics_names["brt"], Float32MultiArray, callback=self.brt_callback)
         self.robot_pose_sub = rospy.Subscriber(self.topics_names["pose"], PoseWithCovarianceStamped, callback=self.robot_pose_callback)
         # self.robot_odom_sub = rospy.Subscriber(self.topics_names["odom"], Odometry, callback=self.odom_callback)
-        self.nominal_action_sub = rospy.Subscriber(self.topics_names["nominal_action"], Twist, queue_size=1, callback=self.nominal_action_callback)
+        self.nominal_action_sub = rospy.Subscriber(self.topics_names["nominal_action"], Twist, queue_size=10, callback=self.nominal_action_callback)
         self.floorplan_sub = rospy.Subscriber(self.topics_names["grid_map"], OccupancyGrid, callback=self.floorplan_callback)
         self.semantic_map_sub = rospy.Subscriber(self.topics_names["semantic_grid_map"], OccupancyGrid, callback=self.semantic_map_callback)
 
         self.constraints_map_pub = rospy.Publisher(self.topics_names["constraints_grid_map"], OccupancyGrid, queue_size=10)
-        self.safe_action_pub = rospy.Publisher(self.topics_names["safe_action"], Twist, queue_size=1)
+        self.safe_action_pub = rospy.Publisher(self.topics_names["safe_action"], Twist, queue_size=10)
         self.safe_action_viz_pub = rospy.Publisher("cmd_vel_viz", TwistStamped, queue_size=1)
         self.value_function_pub = rospy.Publisher(self.topics_names["value_function_at_state"], PoseStamped, queue_size=10)
         self.failure_pub = rospy.Publisher(self.topics_names["failure_set_at_state"], PoseStamped, queue_size=10)
@@ -92,27 +92,27 @@ class SafeControllerNode:
         self.values = np.array(msg.data).reshape((N, M, K))
         self.values_grad = np.gradient(self.values)
         self.brt_computed = True
+        # rospy.loginfo("updated brt")
 
     def nominal_action_callback(self, msg: Twist):
         if self.brt_computed and self.reachability_solver is not None:
-            rospy.loginfo("Returning safe action")
+            # rospy.loginfo("Returning safe action")
             nominal_action = np.array([msg.linear.x, msg.angular.z])
             safe_action, value, initial_value = self.compute_safe_control(nominal_action)
+            print(safe_action)
             safe_action_msg = self._construct_twist_msg(safe_action)
             self.safe_action_pub.publish(safe_action_msg)
             safe_action_viz_msg = self._construct_twist_stamped_msg(safe_action)
             self.safe_action_viz_pub.publish(safe_action_viz_msg)
             value_function_msg = self._construct_pose_stamped_msg([self.robot_pose[0], self.robot_pose[1], value], [0.0, 0.0, self.robot_pose[2]])
             self.value_function_pub.publish(value_function_msg)
-            failure_msg = self._construct_pose_stamped_msg([self.robot_pose[0], self.robot_pose[1], initial_value], [0.0, 0.0, self.robot_pose[2]])
-            self.failure_pub.publish(failure_msg)
-        else:
-            rospy.loginfo("Returning nominal action")
-            # rospy.logwarn("BRT was not computed yet. Sending 0 velocity!")
-            rospy.loginfo("BRT not finished yet")
-            nominal_action = np.array([0, 0])
-            nominal_action_msg = self._construct_twist_msg(nominal_action)
-            self.safe_action_pub.publish(nominal_action_msg)
+            # failure_msg = self._construct_pose_stamped_msg([self.robot_pose[0], self.robot_pose[1], initial_value], [0.0, 0.0, self.robot_pose[2]])
+            # self.failure_pub.publish(failure_msg)
+        # else:
+        #     # rospy.loginfo("Returning nominal action")
+        #     nominal_action = np.array([0.0, 0.0])
+        #     nominal_action_msg = self._construct_twist_msg(nominal_action)
+        #     self.safe_action_pub.publish(nominal_action_msg)
 
     def floorplan_callback(self, msg: OccupancyGrid):
         # TODO: take initial orientation into account. For now will assume it is always 0
@@ -157,9 +157,9 @@ class SafeControllerNode:
             rospy.logwarn("Robot pose was not received. Cannot compute safe action.")
             return nominal_action
         
-        start_time = rospy.Time.now()
-        safe_action, value, initial_values = self.reachability_solver.compute_safe_control(self.robot_pose, nominal_action)
-        time_taken = (rospy.Time.now() - start_time).to_sec()
+        start_time = rospy.Time.now().to_sec()
+        safe_action, value, initial_values = self.reachability_solver.compute_safe_control(self.robot_pose, nominal_action, self.values, self.values_grad)
+        time_taken = rospy.Time.now().to_sec() - start_time
         self.safe_planning_time_pub.publish(Float32(data=time_taken))
         return safe_action, value, initial_values
     
@@ -241,25 +241,25 @@ class SafeControllerNode:
         msg.pose.orientation.w = quat[3]
         return msg
     
-    def _publish_brt_viz(self):
-        if self.brt_computed:
-            msg = OccupancyGrid()
-            msg.header.frame_id = 'map'
-            msg.info.origin.position.x = self.map_origin[0]
-            msg.info.origin.position.y = self.map_origin[1]
-            msg.info.origin.orientation.w = 1
-            msg.info.height = np.shape(self.grid_map)[0]
-            msg.info.width = np.shape(self.grid_map)[1]
-            msg.info.resolution = self.map_resolution
-            ori = np.pi/2 - self.robot_pose[2]
-            ori_idx = int(ori/(2*np.pi)*np.shape(self.values)[2])
-            data = self.values[:, :, ori_idx]
-            data = data.flatten()
-            data[data < 0] = 0
-            data[data > 0] = 100
-            data = 100 - data
-            msg.data = tuple(data.astype(int))
-            self.brt_viz_pub.publish(msg)
+    # def _publish_brt_viz(self):
+    #     if self.brt_computed:
+    #         msg = OccupancyGrid()
+    #         msg.header.frame_id = 'map'
+    #         msg.info.origin.position.x = self.map_origin[0]
+    #         msg.info.origin.position.y = self.map_origin[1]
+    #         msg.info.origin.orientation.w = 1
+    #         msg.info.height = np.shape(self.grid_map)[0]
+    #         msg.info.width = np.shape(self.grid_map)[1]
+    #         msg.info.resolution = self.map_resolution
+    #         ori = np.pi/2 - self.robot_pose[2]
+    #         ori_idx = int(ori/(2*np.pi)*np.shape(self.values)[2])
+    #         data = self.values[:, :, ori_idx]
+    #         data = data.flatten()
+    #         data[data < 0] = 0
+    #         data[data > 0] = 100
+    #         data = 100 - data
+    #         msg.data = tuple(data.astype(int))
+    #         self.brt_viz_pub.publish(msg)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Command Node")

@@ -26,6 +26,7 @@ class ConstraintDetectorNode:
         self.rgb_img = None
         self.depth_img = None
         self.robot_pose = None
+        self.distance_threshold = self.exp_config["distance_threshold"]
 
         # camera params
         self.tf_camera_link_frame = self.exp_config["tf_camera_link_frame"]
@@ -59,7 +60,7 @@ class ConstraintDetectorNode:
         self.robot_pose_sub = rospy.Subscriber(self.topics_names["pose"], PoseWithCovarianceStamped, callback=self.robot_pose_callback)
 
         rospy.loginfo(f"Initialized VLM with the following cofigs: [ \
-                        language constraints: {self.object_detector.text_queries} \n \
+                        language constraints: {self.object_detector.text_queries}, \
                         score threshold: {self.object_detector.score_threshold} \
                         ]")
 
@@ -120,7 +121,7 @@ class ConstraintDetectorNode:
         T_inv = self.get_inv_camera_extrinsics_matrix()
         # print(f"T_inv={T_inv}")
         for bbox, label in detections:
-            x_occ, y_occ = self.object_detector.estimate_object_position(self.depth_img, bbox, K_inv, T_inv, threshold=4)
+            x_occ, y_occ = self.object_detector.estimate_object_position(self.depth_img, bbox, K_inv, T_inv, threshold=self.distance_threshold)
             row, col = self.__position_to_cell(x_occ, y_occ)
             try:
                 self.semantic_grid_map[row, col] = 100
@@ -131,21 +132,21 @@ class ConstraintDetectorNode:
 
         self.publish_vlm_detections(rgb_img)
         self.publish_semantic_grid_map()
-        # merged_map = self.merge_maps()
-        # if merged_map is not None:
-        #     self.publish_constraint_grid_map(merged_map)
+        merged_map = self.merge_maps()
+        if merged_map is not None:
+            self.publish_constraint_grid_map(merged_map)
 
-    # def merge_maps(self):
-    #     """
-    #     merges rtabmap and owl-vit constraints occupancy maps
-    #     """
-    #     if self.semantic_grid_map is None:
-    #         rospy.logwarn("Cannot merge maps because semantic occupancy map has not been initialized yet.")
-    #         return None
+    def merge_maps(self):
+        """
+        merges rtabmap and owl-vit constraints occupancy maps
+        """
+        if self.semantic_grid_map is None:
+            rospy.logwarn("Cannot merge maps because semantic occupancy map has not been initialized yet.")
+            return None
         
-    #     merged_map = self.grid_map.astype(int) + self.semantic_grid_map.astype(int)
-    #     merged_map = np.clip(merged_map, a_min=-1, a_max=100, dtype=int)
-    #     return merged_map
+        merged_map = self.grid_map.astype(int) + self.semantic_grid_map.astype(int)
+        merged_map = np.clip(merged_map, a_min=-1, a_max=100, dtype=int)
+        return merged_map
 
     def publish_vlm_detections(self, rgb_img):
         msg = self.bridge.cv2_to_imgmsg(rgb_img, encoding="rgb8")
