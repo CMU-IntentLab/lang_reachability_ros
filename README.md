@@ -32,6 +32,25 @@ conda config --env --add channels robostack-staging
 conda install ros-noetic-desktop
 ```
 
+# Evaluation
+## results stored in each file
+- **brt_computation_time.npy**
+  - Nx2 matrix, 
+  - each row is `[time taken to compute the brt, timestamp we saved the data]`
+- **combined_map_over_time.npy**: 
+  - NxMxK matrix, where we append the MxK map of constraints (rtabmap + owl-vit) over time
+- **failure_at_state.npy**:
+  - Nx5 matrix 
+  - each row is `[x_robot, y_robot, theta_robot, value of the initial value function at this state, timestamp we saved the data]`
+  - if the value is negative, we entered a failure state
+- **safe_planning_time.npy**: 
+  - Nx2 matrix 
+  - each row is `[time taken to compute the safe action, timestamp we saved the data]`
+- **value_function_at_state.npy**: 
+  - Nx5 matrix
+  - each row is `[x_robot, y_robot, theta_robot, value of the converged value function at this state, timestamp we saved the data]`
+  - if the value is negative, we entered an unsafe state and the safety controller was activated
+
 # Installation
 - create a new conda environment exactly equal to lang-reachability (say lang-reachability-ros) just to preserve the previous one in case things go wrong
 - install habitat and owl-vit dependencies using the env.yaml file we have

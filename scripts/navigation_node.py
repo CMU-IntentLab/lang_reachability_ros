@@ -113,10 +113,10 @@ class NavigationNode:
             return False
 
     def publish_command(self):
-        start_time = rospy.Time.now().secs
+        start_time = rospy.Time.now()
         v, w = self._navigator.get_command()
 
-        time_taken = rospy.Time.now().secs - start_time
+        time_taken = (rospy.Time.now() - start_time).to_sec()
         self.planning_time_pub.publish(Float32(data=time_taken))
         # print(v, w)
 

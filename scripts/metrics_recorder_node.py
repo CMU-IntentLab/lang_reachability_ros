@@ -15,7 +15,8 @@ import tf.transformations as tft
 
 import numpy as np
 import datetime
-
+import signal
+import sys
 import argparse
 import json
 
@@ -44,15 +45,18 @@ class MetricsRecorderNode:
         self.combined_map_over_time = None
         self.semantic_map_over_time = None
         self.semantic_map_times = []
-        self.combined_times = []
+        self.combined_map_times = []
         self.text_queries = []
         self.rgb_images_writer = None
         self.rgb_detections_writer = None
+        self.vlm_inference_times = []
 
         self.robot_state_sub = rospy.Subscriber(self.topics_names["pose"], PoseWithCovarianceStamped, callback=self.robot_state_callback)
         self.value_function_sub = rospy.Subscriber(self.topics_names["value_function_at_state"], PoseStamped, callback=self.value_function_callback)
         self.failure_sub = rospy.Subscriber(self.topics_names["failure_set_at_state"], PoseStamped, callback=self.failure_callback)
-        # self.planning_latency_sub = rospy.Subscriber()
+        self.vlm_inference_time_sub = rospy.Subscriber(self.topics_names["vlm_inference_time"], Float32, callback=self.vlm_inference_time_callback)
+
+        self.constraint_map_sub = rospy.Subscriber(self.topics_names['constraints_grid_map'], OccupancyGrid, callback=self.constraints_map_callback)
         self.nominal_planning_time_sub = rospy.Subscriber(self.topics_names["nominal_planning_time"], Float32, self.nominal_planning_time_callback)
         self.safe_planning_time_sub = rospy.Subscriber(self.topics_names["safe_planning_time"], Float32, callback=self.safe_planning_time_callback)
         self.brt_computation_time_sub = rospy.Subscriber(self.topics_names["brt_computation_time"], Float32, callback=self.brt_computation_time_callback)
@@ -61,6 +65,7 @@ class MetricsRecorderNode:
         self.language_queries_sub = rospy.Subscriber(self.topics_names["language_constraint"], String, callback=self.text_queries_callback)
         self.rgb_image_sub = rospy.Subscriber(self.topics_names["rgb_image"], Image, callback=self.rgb_image_callback)
         self.rgb_detections_sub = rospy.Subscriber(self.topics_names["vlm_detections"], Image, callback=self.rgb_detection_callback)
+
 
     def make_exp_config(self):
         self.exp_path = self.args.exp_path
@@ -73,9 +78,13 @@ class MetricsRecorderNode:
         with open(self.topics_path, 'r') as f:
             topics_names = json.load(f)
         return topics_names
-    
+
+    def vlm_inference_time_callback(self, msg: Float32):
+        self.vlm_inference_times.append([msg.data, self.get_time_since_start()])
+
+
     def robot_state_callback(self, msg: PoseWithCovarianceStamped):
-        time = msg.header.stamp.secs
+        time = self.get_time_since_start()
         pos = msg.pose.pose.position
         quat = msg.pose.pose.orientation
         euler = tft.euler_from_quaternion([quat.x, quat.y, quat.z, quat.w])
@@ -83,12 +92,12 @@ class MetricsRecorderNode:
         self.trajectory.append(pose)
 
     def value_function_callback(self, msg: PoseStamped):
-        time = msg.header.stamp.secs
+        time = self.get_time_since_start()
         value = [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z, time]
         self.value_function_at_state.append(value)
     
     def failure_callback(self, msg: PoseStamped):
-        time = msg.header.stamp.secs
+        time = self.get_time_since_start()
         value = [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z, time]
         self.failure_at_state.append(value)
 
@@ -101,13 +110,14 @@ class MetricsRecorderNode:
             top_right = bottom_left + np.array([msg.info.width, msg.info.height]) * msg.info.resolution
             self.map_size_meters = np.vstack((bottom_left, top_right))
 
-    # def constraints_map_callback(self, msg: OccupancyGrid):
-    #     combined_map_now = np.reshape(msg.data, (msg.info.height, msg.info.width))
-    #     if self.combined_map_over_time is None:
-    #         self.combined_map_over_time = combined_map_now
-    #     else:
-    #         self.combined_map_over_time = np.dstack((self.combined_map_over_time, combined_map_now))
-    #     self.combined_map_times.append(self.get_time_since_start())
+    def constraints_map_callback(self, msg: OccupancyGrid):
+        combined_map_now = np.reshape(msg.data, (msg.info.height, msg.info.width))
+        if self.combined_map_over_time is None:
+            self.combined_map_over_time = combined_map_now
+        else:
+            self.combined_map_over_time = np.dstack((self.combined_map_over_time, combined_map_now))
+        self.combined_map_times.append((self.get_time_since_start(), msg.info.resolution,
+                                        (msg.info.origin.position.x, msg.info.origin.position.y)))
 
     def semantic_map_callback(self, msg: OccupancyGrid):
         semantic_map_now = np.reshape(msg.data, (msg.info.height, msg.info.width))
@@ -115,7 +125,8 @@ class MetricsRecorderNode:
             self.semantic_map_over_time = semantic_map_now
         else:
             self.semantic_map_over_time = np.dstack((self.semantic_map_over_time, semantic_map_now))
-        self.semantic_map_times.append(self.get_time_since_start())
+        self.semantic_map_times.append((self.get_time_since_start(), msg.info.resolution,
+                                        (msg.info.origin.position.x, msg.info.origin.position.y)))
 
     def nominal_planning_time_callback(self, msg: Float32):
         self.nominal_planning_time.append([msg.data, self.get_time_since_start()])
@@ -173,9 +184,12 @@ class MetricsRecorderNode:
         with open(os.path.join(self.save_path, "text_queries.txt"), "w") as file:
             for query in self.text_queries:
                 file.write(query + "\n")
+        with open(os.path.join(self.save_path, now, "exp_config.json"), "w") as file:
+            json.dump(self.exp_config, file)
 
     def get_time_since_start(self):
         return rospy.Time.now().secs - self.start_time
+
 
 
 parser = argparse.ArgumentParser(description="Command Node")
@@ -188,7 +202,14 @@ assert args.topics_path is not None, "topics names json file must be provided"
 
 rospy.init_node("metrics_recorder_node")
 node = MetricsRecorderNode(args)
-print("Started recording data!")
+print("Started recording data")
+
+def signal_handler(signal, frame):
+    print("Terminating and saving metrics...")
+    node.save_all_metrics()
+    sys.exit(0)
+
+signal.signal(signal.SIGTERM, signal_handler)
 
 last_print = rospy.Time.now().secs
 rate = rospy.Rate(10)
@@ -198,5 +219,3 @@ while not rospy.is_shutdown():
     if rospy.Time.now().secs - last_print > 5:
        last_print = rospy.Time.now().secs 
        print("I'm still alive and recording data!")
-       
-node.save_all_metrics()

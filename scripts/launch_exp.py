@@ -104,7 +104,7 @@ if __name__ == '__main__':
     with open(exp_configs_path, 'r') as f:
         exp_configs = json.load(f)
 
-    topics_names_path = os.path.join(dir_path, 'config', 'hardware_exps', exp_name, "topics_names.json")
+    topics_names_path = os.path.join(dir_path, 'config', test_platform, exp_name, "topics_names.json")
 
     module_name_list = exp_configs['exp_name'].split('_')
     module_name_list = ["command_node", "metrics_recorder_node"] + module_name_list

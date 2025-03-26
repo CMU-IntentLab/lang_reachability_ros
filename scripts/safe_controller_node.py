@@ -108,6 +108,8 @@ class SafeControllerNode:
             self.failure_pub.publish(failure_msg)
         else:
             rospy.loginfo("Returning nominal action")
+            # rospy.logwarn("BRT was not computed yet. Sending 0 velocity!")
+            rospy.loginfo("BRT not finished yet")
             nominal_action = np.array([0, 0])
             nominal_action_msg = self._construct_twist_msg(nominal_action)
             self.safe_action_pub.publish(nominal_action_msg)
@@ -126,14 +128,38 @@ class SafeControllerNode:
         msg = self._construct_occupancy_grid_msg(constraints_map)
         self.constraints_map_pub.publish(msg)
 
+    def compute_brt(self):
+        if self.reachability_solver is None:
+            rospy.logwarn("Reachability solver was not initialized yet. Cannot compute BRT.")
+            return
+
+        constraints_grid_map = self.merge_maps()
+        constraints_grid_map = 1 - np.abs(constraints_grid_map)     # make -1 = occupied, 0 = occupied, 1 = free
+        rospy.loginfo(f"grid map shape = {np.shape(constraints_grid_map)}")
+
+        if not self.brt_computed:
+            rospy.loginfo("Computing initial BRT. This may (it probably will) take a while.")
+        else:
+            rospy.loginfo("Computing warm-started BRT.")
+
+        start_time = rospy.Time.now()
+        self.values = self.reachability_solver.solve(constraints_grid_map)
+        end_time = rospy.Time.now()
+        time_taken = (end_time - start_time).to_sec()
+        self.brt_computation_time_pub.publish(Float32(data=time_taken))
+
+        self.brt_computed = True
+        self.last_updated = end_time
+        rospy.loginfo("Finished BRT computation")
+
     def compute_safe_control(self, nominal_action):
         if self.robot_pose is None:
             rospy.logwarn("Robot pose was not received. Cannot compute safe action.")
             return nominal_action
         
-        start_time = rospy.Time.now().secs
-        safe_action, value, initial_values = self.reachability_solver.compute_safe_control(self.robot_pose, nominal_action, self.values, self.values_grad)
-        time_taken = rospy.Time.now().secs - start_time
+        start_time = rospy.Time.now()
+        safe_action, value, initial_values = self.reachability_solver.compute_safe_control(self.robot_pose, nominal_action)
+        time_taken = (rospy.Time.now() - start_time).to_sec()
         self.safe_planning_time_pub.publish(Float32(data=time_taken))
         return safe_action, value, initial_values
     
